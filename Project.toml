@@ -1,0 +1,29 @@
+name = "PSRDatabase"
+uuid = "d9b62651-08e5-4754-bb8c-8acb2abbd08d"
+version = "0.1.0"
+
+[deps]
+DBInterface = "a10d1c49-ce27-4219-8d33-6db1a4562965"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+SQLite = "0aa819cd-b072-5ff4-a722-6bc24af294d9"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
+
+[compat]
+DBInterface = "2.6.1"
+DataFrames = "1.8.0"
+Dates = "1.11.0"
+OrderedCollections = "1.8.1"
+Random = "1.11.0"
+SQLite = "1.6.1"
+TOML = "1.0.3"
+Tables = "1.12.1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
