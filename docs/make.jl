@@ -1,7 +1,10 @@
+using Pkg
+Pkg.instantiate()
+
 using Documenter
 
+Pkg.activate(dirname(@__DIR__))
 using PSRDatabase
-const PSRI = PSRDatabase
 
 makedocs(;
     modules = [PSRDatabase],
@@ -12,7 +15,6 @@ makedocs(;
     authors = "psrenergy",
     pages = [
         "Home" => "index.md",
-        "manual.md",
         "PSRDatabase Overview" => String[
             "psrdatabase/introduction.md",
             "psrdatabase/rules.md",
@@ -21,6 +23,7 @@ makedocs(;
         "PSRDatabase Examples" => String[
             "sqlite_examples/migrations.md",
         ],
+        "API Reference" => "api_reference.md",
     ],
 )
 
