@@ -14,21 +14,9 @@ Documenter.makedocs(;
         prettyurls = get(ENV, "CI", "false") == "true",
         canonical = "https://psrenergy.github.io/PSRDatabase.jl",
         edit_link = "master",
-        # assets = [
-        #     "assets/favicon.ico",
-        # ],
     ),
     pages = [
         "Home" => "index.md",
-        "manual.md",
-        "PSRDatabase Overview" => [
-            "psrdatabase/introduction.md",
-            "psrdatabase/rules.md",
-            "psrdatabase/time_series.md",
-        ],
-        "PSRDatabase Examples" => [
-            "sqlite_examples/migrations.md",
-        ],
     ],
 )
 
