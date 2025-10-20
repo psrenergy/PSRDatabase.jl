@@ -210,7 +210,7 @@ end
 """
     generate_current_schema_file(db::SQLite.DB, file::String)
 
-generates a .sql file based in sqlite_master that indicates the statements to create a new db from scratch.
+Generates a .sql file based in sqlite_master that indicates the statements to create a new db from scratch.
 """
 function generate_current_schema_file(db::SQLite.DB, file::String)
     if isfile(file)
@@ -229,7 +229,7 @@ end
 """
     test_migrations(path_migrations_directory::String)
 
-fucntion to put in the test suite of the module to verify that the migrations are behaving correctly.
+Function to put in the test suite of the module to verify that the migrations are behaving correctly.
 """
 function test_migrations(path_migrations_directory::String)
     migrations = get_sorted_migrations(path_migrations_directory)

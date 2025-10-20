@@ -424,4 +424,38 @@ function foreign_keys_list(db::SQLite.DB, table_name::String)
     return df
 end
 
+"""
+    close!(db::DatabaseSQLite)
+
+Close the database connection.
+
+This function closes the SQLite database connection and releases any associated resources.
+Always call this function when you're done working with a database to ensure proper cleanup.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection to close
+
+# Returns
+
+  - Nothing
+
+# Examples
+
+```julia
+# Open a database
+db = PSRDatabase.load_db("my_database.sqlite")
+
+# Work with the database
+# ... perform operations ...
+
+# Close the database when done
+PSRDatabase.close!(db)
+```
+
+# Notes
+
+After closing, the database connection cannot be used for further operations. You'll need to
+call `load_db` again if you want to work with the database.
+"""
 close!(db::DatabaseSQLite) = DBInterface.close!(db.sqlite_db)

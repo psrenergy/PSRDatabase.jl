@@ -521,6 +521,32 @@ function _validate_time_series_dimensions(
     end
 end
 
+"""
+    _validate_database_pragmas(db::SQLite.DB)
+
+Internal function to validate that required SQLite pragmas are properly set in the database.
+
+Currently validates:
+
+  - User version must be defined and not set to zero
+
+# Arguments
+
+  - `db::SQLite.DB`: The SQLite database connection to validate
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if user_version is 0 or not defined
+
+# Notes
+
+This is an internal validation function used during database loading to ensure the database
+has proper version information. The user_version pragma is used for schema versioning and migrations.
+"""
 function _validate_database_pragmas(db::SQLite.DB)
     _validate_user_version(db)
     return nothing
