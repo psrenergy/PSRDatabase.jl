@@ -1,24 +1,32 @@
 using Documenter
-
 using PSRDatabase
-const PSRI = PSRDatabase
 
-makedocs(;
+DocMeta.setdocmeta!(PSRDatabase, :DocTestSetup, :(using PSRDatabase); recursive = true)
+
+Documenter.makedocs(;
+    sitename = "PSRDatabase",
     modules = [PSRDatabase],
+    repo = "https://github.com/psrenergy/PSRDatabase.jl/blob/{commit}{path}#{line}",
     doctest = true,
     clean = true,
-    format = Documenter.HTML(; mathengine = Documenter.MathJax2()),
-    sitename = "PSRDatabase.jl",
-    authors = "psrenergy",
+    checkdocs = :none,
+    format = Documenter.HTML(;
+        prettyurls = get(ENV, "CI", "false") == "true",
+        canonical = "https://psrenergy.github.io/PSRDatabase.jl",
+        edit_link = "master",
+        # assets = [
+        #     "assets/favicon.ico",
+        # ],
+    ),
     pages = [
         "Home" => "index.md",
         "manual.md",
-        "PSRDatabase Overview" => String[
+        "PSRDatabase Overview" => [
             "psrdatabase/introduction.md",
             "psrdatabase/rules.md",
             "psrdatabase/time_series.md",
         ],
-        "PSRDatabase Examples" => String[
+        "PSRDatabase Examples" => [
             "sqlite_examples/migrations.md",
         ],
     ],
@@ -26,5 +34,6 @@ makedocs(;
 
 deploydocs(;
     repo = "github.com/psrenergy/PSRDatabase.jl.git",
+    devbranch = "master",
     push_preview = true,
 )

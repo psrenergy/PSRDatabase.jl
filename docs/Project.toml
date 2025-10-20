@@ -1,5 +1,6 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+PSRDatabase = "d9b62651-08e5-4754-bb8c-8acb2abbd08d"
 
 [compat]
-Documenter = "~0.27"
+Documenter = "1"
