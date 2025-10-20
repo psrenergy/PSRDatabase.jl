@@ -1,3 +1,14 @@
+"""
+    GroupMap
+
+Internal struct to store information about a time series group for docstring generation.
+
+# Fields
+
+  - `group_id::String`: The identifier of the time series group
+  - `parameters::Vector{TimeSeries{<:Number}}`: Vector of time series parameters in the group
+  - `dimensions::Vector{String}`: Names of the dimensions for this time series group
+"""
 struct GroupMap
     group_id::String
     parameters::Vector{TimeSeries{<:Number}}
@@ -209,6 +220,51 @@ function _generate_docstrings(
     return arguments
 end
 
+"""
+    collection_docstring(model_folder::String, collection::String; ignore_id::Bool = true)
+
+Generate automatic documentation for a collection's attributes.
+
+This function creates documentation text that lists all required and optional parameters, 
+vector attributes, relations, and time series for a specific collection in a PSR model.
+It reads the database schema from migrations and attribute metadata from TOML files.
+
+# Arguments
+- `model_folder::String`: Path to the model directory containing migrations and UI metadata
+- `collection::String`: Name of the collection to document
+- `ignore_id::Bool`: If `true` (default), excludes the `id` field from documentation
+
+# Returns
+- `String`: Formatted documentation string with all collection attributes
+
+# Examples
+```julia
+# Use in a model-specific add function to automatically generate parameter documentation
+\"\"\"
+    add_hydro_unit!(db::DatabaseSQLite; kwargs...)
+
+Add a Hydro Unit to the database.
+
+# Arguments
+\$(PSRDatabase.collection_docstring(model_directory(), "HydroUnit"))
+
+# Examples
+    db = PSRDatabase.load_db("path/to/model.db")
+    add_hydro_unit!(
+        db;
+        label = "Plant1",
+        initial_volume = 100.0,
+    )
+\"\"\"
+function add_hydro_unit!(db::DatabaseSQLite; kwargs...)
+    PSRDatabase.create_element!(db, "HydroUnit"; kwargs...)
+end
+```
+
+# Notes
+Creates a temporary database from migrations to extract schema information. The temporary
+database is automatically cleaned up after generating the docstring.
+"""
 function collection_docstring(
     model_folder::String,
     collection::String;
@@ -298,6 +354,53 @@ function collection_docstring(
     return docstring
 end
 
+"""
+    time_series_files_docstrings(model_folder::String, ignore_id::Bool = true)
+
+Generate documentation for all time series file attributes across all collections.
+
+This function creates documentation text listing all time series file attributes
+organized by collection. It reads the database schema from migrations and attribute
+metadata from TOML files.
+
+# Arguments
+- `model_folder::String`: Path to the model directory containing migrations and UI metadata
+- `ignore_id::Bool`: If `true` (default), excludes the `id` field from documentation
+
+# Returns
+- `String`: Formatted documentation string with all time series file attributes organized by collection
+
+# Examples
+```julia
+# Use in a model's link function to automatically document available time series files
+\"\"\"
+    link_time_series_to_file(db::DatabaseSQLite, table_name::String; kwargs...)
+
+Links a time series to a file in the database.
+
+Each collection in the database can be linked to different time series files.
+
+The possible files for each collection are:
+
+\$(PSRDatabase.time_series_files_docstrings(model_directory()))
+
+# Examples
+    db = PSRDatabase.load_db("path/to/model.db")
+    link_time_series_to_file(
+        db,
+        "HydroUnit";
+        file_path = "generation.csv",
+    )
+\"\"\"
+function link_time_series_to_file(db::DatabaseSQLite, table_name::String; kwargs...)
+    PSRDatabase.set_time_series_file!(db, table_name; kwargs...)
+end
+```
+
+# Notes
+Creates a temporary database from migrations to extract schema information. The temporary
+database is automatically cleaned up after generating the docstring.
+"""
 function time_series_files_docstrings(
     model_folder::String,
     ignore_id::Bool = true,
