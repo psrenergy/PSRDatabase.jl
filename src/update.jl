@@ -168,7 +168,7 @@ function _update_vector_parameters!(
     collection_id::String,
     attribute_id::String,
     id::Integer,
-    vals::Vector{<:Any},
+    vals::Vector,
 )
     attribute = _get_attribute(db, collection_id, attribute_id)
     group_id = attribute.group_id
