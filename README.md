@@ -1,7 +1,7 @@
 # PSRDatabase.jl
 
 
-[build-img]: https://github.com/psrenergy/PSRDatabase.jl/actions/workflows/ci.yml/badge.svg?branch=master
+[build-img]: https://github.com/psrenergy/PSRDatabase.jl/actions/workflows/CI.yml/badge.svg?branch=master
 [build-url]: https://github.com/psrenergy/PSRDatabase.jl/actions?query=workflow%3ACI
 
 [codecov-img]: https://codecov.io/gh/psrenergy/PSRDatabase.jl/coverage.svg?branch=master
