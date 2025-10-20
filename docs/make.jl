@@ -1,8 +1,6 @@
-using Pkg
-Pkg.instantiate()
-
 using Documenter
 
+using Pkg
 Pkg.activate(dirname(@__DIR__))
 using PSRDatabase
 
