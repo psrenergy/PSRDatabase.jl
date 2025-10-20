@@ -5,8 +5,8 @@ using PSRDatabase
 using Test
 
 @testset "Aqua" begin
-    Aqua.test_ambiguities(PSRDatabase, recursive = false)
-    Aqua.test_all(PSRDatabase, ambiguities = false)
+    Aqua.test_ambiguities(PSRDatabase; recursive = false)
+    Aqua.test_all(PSRDatabase; ambiguities = false)
     return nothing
 end
 
