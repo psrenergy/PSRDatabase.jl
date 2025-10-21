@@ -1,4 +1,8 @@
+using Pkg
 using Documenter
+
+Pkg.activate(dirname(@__DIR__))
+
 using PSRDatabase
 
 DocMeta.setdocmeta!(PSRDatabase, :DocTestSetup, :(using PSRDatabase); recursive = true)
@@ -17,6 +21,15 @@ Documenter.makedocs(;
     ),
     pages = [
         "Home" => "index.md",
+        "PSRDatabase Overview" => String[
+            "psrdatabase/introduction.md",
+            "psrdatabase/rules.md",
+            "psrdatabase/time_series.md",
+        ],
+        "PSRDatabase Examples" => String[
+            "sqlite_examples/migrations.md",
+        ],
+        "API Reference" => "api_reference.md",
     ],
 )
 

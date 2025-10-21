@@ -1,10 +1,7 @@
 # PSRDatabase Documentation
 
-PSRDatabase, or PSRI, is a Julia package that provides an interface to read and write open-source formats for PSR models.
-It is comprised of three main modules:
-- `OpenStudy`: Reads and writes data in the JSON format
-- `OpenBinary`: Reads and writes time series data in the binary format
-- `PSRDatabase`: Reads and writes data in the SQL format
+
+PSRDatabase is a Julia package that provides an interface to read and write open-source formats for PSR models that use an SQLite database.
 
 ## Installation
 

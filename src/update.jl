@@ -1,3 +1,8 @@
+"""
+    const UPDATE_METHODS_BY_CLASS_OF_ATTRIBUTE
+
+A dictionary mapping attribute classes to their corresponding update method names in PSRDatabase.
+"""
 const UPDATE_METHODS_BY_CLASS_OF_ATTRIBUTE = Dict(
     ScalarParameter => "update_scalar_parameter!",
     ScalarRelation => "set_scalar_relation!",
@@ -7,6 +12,43 @@ const UPDATE_METHODS_BY_CLASS_OF_ATTRIBUTE = Dict(
     TimeSeriesFile => "set_time_series_file!",
 )
 
+"""
+    update_scalar_parameter!(db::DatabaseSQLite, collection_id::String, attribute_id::String, label::String, val)
+
+Update the value of a scalar parameter attribute for a specific element in a collection.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_id::String`: The identifier of the collection containing the element
+  - `attribute_id::String`: The identifier of the scalar parameter attribute to update
+  - `label::String`: The label of the element to update
+  - `val`: The new value for the attribute (must match the attribute's type: Float64, Int64, String, or DateTime)
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if the collection or attribute doesn't exist
+  - `DatabaseException` if the attribute is not a scalar parameter
+  - `DatabaseException` if the value type doesn't match the attribute type
+  - `DatabaseException` if the element label doesn't exist
+
+# Examples
+
+```julia
+# Update a string parameter
+PSRDatabase.update_scalar_parameter!(db, "Resource", "type", "Resource 1", "D")
+
+# Update a numeric parameter
+PSRDatabase.update_scalar_parameter!(db, "Resource", "some_value_1", "Resource 1", 1.0)
+
+# Update a date parameter
+PSRDatabase.update_scalar_parameter!(db, "Configuration", "date_initial", "Toy Case", DateTime(2021, 1, 1))
+```
+"""
 function update_scalar_parameter!(
     db::DatabaseSQLite,
     collection_id::String,
@@ -48,12 +90,61 @@ function _update_scalar_parameter!(
     return nothing
 end
 
+"""
+    update_vector_parameters!(db::DatabaseSQLite, collection_id::String, attribute_id::String, label::String, vals::Vector)
+
+Update all values of a vector parameter attribute for a specific element in a collection.
+
+This function replaces all existing values for the vector with the new values provided.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_id::String`: The identifier of the collection containing the element
+  - `attribute_id::String`: The identifier of the vector parameter attribute to update
+  - `label::String`: The label of the element to update
+  - `vals::Vector`: A vector containing the new values (must match the attribute's type)
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if the collection or attribute doesn't exist
+  - `DatabaseException` if the attribute is not a vector parameter
+  - `DatabaseException` if the value types don't match the attribute type
+  - `DatabaseException` if the element label doesn't exist
+  - `DatabaseException` if updating vectors in a group and the new length doesn't match other vectors in the group
+
+# Examples
+
+```julia
+# Update a vector of numeric values
+PSRDatabase.update_vector_parameters!(
+    db,
+    "Resource",
+    "some_value_1",
+    "Resource 1",
+    [10.0, 20.0, 30.0],
+)
+
+# Update to a different number of values (if not constrained by vector group)
+PSRDatabase.update_vector_parameters!(
+    db,
+    "Resource",
+    "some_value_1",
+    "Resource 1",
+    [5.0, 15.0],
+)
+```
+"""
 function update_vector_parameters!(
     db::DatabaseSQLite,
     collection_id::String,
     attribute_id::String,
     label::String,
-    vals::Vector{<:Any},
+    vals::Vector,
 )
     _throw_if_collection_or_attribute_do_not_exist(
         db,
@@ -77,7 +168,7 @@ function _update_vector_parameters!(
     collection_id::String,
     attribute_id::String,
     id::Integer,
-    vals::Vector{<:Any},
+    vals::Vector,
 )
     attribute = _get_attribute(db, collection_id, attribute_id)
     group_id = attribute.group_id
@@ -134,6 +225,65 @@ function set_scalar_relation!(
     return nothing
 end
 
+"""
+    set_scalar_relation!(db::DatabaseSQLite, collection_from::String, collection_to::String, label_collection_from::String, label_collection_to::String, relation_type::String)
+
+Set a scalar relation between two elements, linking an element from one collection to an element in another collection (or the same collection).
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_from::String`: The identifier of the collection containing the element to set the relation from
+  - `collection_to::String`: The identifier of the collection containing the element to set the relation to
+  - `label_collection_from::String`: The label of the element to set the relation from
+  - `label_collection_to::String`: The label of the element to set the relation to
+  - `relation_type::String`: The type/name of the relation (e.g., "id", "turbine_to", "spill_to")
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if the attribute is not a scalar relation
+  - `DatabaseException` if either element label doesn't exist
+  - `DatabaseException` if trying to set a relation between the same element (when both collections are the same)
+  - `DatabaseException` if the relation type doesn't exist
+
+# Examples
+
+```julia
+# Set a relation to a different collection
+PSRDatabase.set_scalar_relation!(
+    db,
+    "Plant",
+    "Resource",
+    "Plant 1",
+    "Resource 1",
+    "id",
+)
+
+# Set a relation within the same collection
+PSRDatabase.set_scalar_relation!(
+    db,
+    "Plant",
+    "Plant",
+    "Plant 3",
+    "Plant 1",
+    "turbine_to",
+)
+
+# Update an existing relation
+PSRDatabase.set_scalar_relation!(
+    db,
+    "Plant",
+    "Resource",
+    "Plant 1",
+    "Resource 2",  # Changes from Resource 1 to Resource 2
+    "id",
+)
+```
+"""
 function set_scalar_relation!(
     db::DatabaseSQLite,
     collection_from::String,
@@ -183,6 +333,67 @@ function set_scalar_relation!(
     return nothing
 end
 
+"""
+    set_vector_relation!(db::DatabaseSQLite, collection_from::String, collection_to::String, label_collection_from::String, labels_collection_to::Vector{String}, relation_type::String)
+
+Set a vector relation between an element and multiple elements, linking an element from one collection to multiple elements in another collection.
+
+This function replaces all existing relations for the vector with the new relations provided.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_from::String`: The identifier of the collection containing the element to set the relation from
+  - `collection_to::String`: The identifier of the collection containing the elements to set the relation to
+  - `label_collection_from::String`: The label of the element to set the relation from
+  - `labels_collection_to::Vector{String}`: A vector of labels of elements to set the relation to
+  - `relation_type::String`: The type/name of the relation
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if the attribute is not a vector relation
+  - `DatabaseException` if any element label doesn't exist
+  - `DatabaseException` if the relation type doesn't exist
+  - `DatabaseException` if the number of relations doesn't match other vectors in the same group
+
+# Examples
+
+```julia
+# Set a vector relation
+PSRDatabase.set_vector_relation!(
+    db,
+    "Plant",
+    "Cost",
+    "Plant 1",
+    ["Cost 1", "Cost 2"],
+    "some_relation_type",
+)
+
+# Update vector relation with different elements
+PSRDatabase.set_vector_relation!(
+    db,
+    "Plant",
+    "Cost",
+    "Plant 1",
+    ["Cost 2", "Cost 3", "Cost 4"],  # Now relates to 3 costs instead of 2
+    "some_relation_type",
+)
+
+# Clear all relations (empty vector)
+PSRDatabase.set_vector_relation!(
+    db,
+    "Plant",
+    "Cost",
+    "Plant 1",
+    String[],
+    "some_relation_type",
+)
+```
+"""
 function set_vector_relation!(
     db::DatabaseSQLite,
     collection_from::String,
@@ -271,6 +482,58 @@ function set_vector_relation!(
     return nothing
 end
 
+"""
+    set_time_series_file!(db::DatabaseSQLite, collection_id::String; kwargs...)
+
+Set or update time series file paths for a collection.
+
+This function sets the file paths for time series attributes that store their data in external files.
+There can only be one set of time series files per collection.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_id::String`: The identifier of the collection to set time series files for
+  - `kwargs...`: Named arguments where keys are time series file attribute names and values are file paths (strings)
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if the collection doesn't exist
+  - `DatabaseException` if any attribute is not a time series file attribute
+  - `DatabaseException` if any value is not a string
+  - `DatabaseException` if there are multiple time series file entries (database corruption)
+
+# Examples
+
+```julia
+# Set time series files for a collection
+PSRDatabase.set_time_series_file!(
+    db,
+    "Plant";
+    generation = "generation_data.csv",
+    cost = "cost_data.csv",
+)
+
+# Update a single time series file
+PSRDatabase.set_time_series_file!(
+    db,
+    "Plant";
+    generation = "new_generation_data.csv",
+)
+
+# Set multiple time series files at once
+PSRDatabase.set_time_series_file!(
+    db,
+    "Resource";
+    availability = "availability.txt",
+    price = "price.txt",
+)
+```
+"""
 function set_time_series_file!(
     db::DatabaseSQLite,
     collection_id::String;
@@ -380,6 +643,59 @@ function _update_time_series_row!(
     return nothing
 end
 
+"""
+    update_time_series_row!(db::DatabaseSQLite, collection_id::String, attribute_id::String, label::String, val; dimensions...)
+
+Update an existing value in a time series attribute for a specific element and dimension combination.
+
+Unlike `add_time_series_row!`, this function only updates existing rows and will throw an error if the
+specified dimension combination doesn't exist.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_id::String`: The identifier of the collection containing the element
+  - `attribute_id::String`: The identifier of the time series attribute
+  - `label::String`: The label of the element to update the time series value for
+  - `val`: The new value for the time series at the specified dimensions
+  - `dimensions...`: Named arguments specifying the dimension values that identify the row to update
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if the attribute is not a time series
+  - `DatabaseException` if the number of dimensions doesn't match the attribute definition
+  - `DatabaseException` if dimension names don't match the attribute definition
+  - `DatabaseException` if the specified dimension combination doesn't exist
+
+# Examples
+
+```julia
+# Update an existing time series value
+PSRDatabase.update_time_series_row!(
+    db,
+    "Plant",
+    "generation",
+    "Plant 1",
+    150.0;
+    date_time = DateTime(2020, 1, 1),
+)
+
+# Update with multiple dimensions
+PSRDatabase.update_time_series_row!(
+    db,
+    "Plant",
+    "cost",
+    "Plant 1",
+    75.0;
+    date_time = DateTime(2020, 1, 1),
+    stage = 1,
+)
+```
+"""
 function update_time_series_row!(
     db::DatabaseSQLite,
     collection_id::String,

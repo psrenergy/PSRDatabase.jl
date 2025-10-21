@@ -200,6 +200,66 @@ function _create_element!(
     return nothing
 end
 
+"""
+    create_element!(db::DatabaseSQLite, collection_id::String; kwargs...)
+
+Create a new element in the specified collection with the given attributes.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+
+  - `collection_id::String`: The identifier of the collection to add the element to
+  - `kwargs...`: Named arguments specifying the attribute values for the new element
+
+      + Scalar parameters: Single values (Int, Float64, String, DateTime)
+      + Vector parameters: Arrays of values that must all have the same length within a group
+      + Scalar relations: String labels of related elements or integer IDs
+      + Vector relations: Arrays of string labels of related elements
+      + Time series: File paths as strings
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if the collection doesn't exist
+  - `DatabaseException` if an attribute doesn't exist or has invalid type
+  - `DatabaseException` if vector parameters in the same group have different lengths
+  - `DatabaseException` if a required attribute is missing (e.g., label)
+  - `SQLiteException` if a label already exists (violates unique constraint)
+
+# Examples
+
+```julia
+# Create element with scalar parameters
+PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
+
+# Create element with vector parameters
+PSRDatabase.create_element!(
+    db,
+    "Resource";
+    label = "Resource 1",
+    type = "E",
+    some_value = [1.0, 2.0, 3.0],
+)
+
+# Create element with scalar relation (using label)
+PSRDatabase.create_element!(db, "Plant"; label = "Plant 1", capacity = 50.0, resource_id = "Resource 1")
+
+# Create element with vector relations
+PSRDatabase.create_element!(
+    db,
+    "Process";
+    label = "Sugar Mill",
+    product_input = ["Sugarcane"],
+    factor_input = [1.0],
+    product_output = ["Sugar", "Molasse", "Bagasse"],
+    factor_output = [0.3, 0.3, 0.4],
+)
+```
+"""
 function create_element!(
     db::DatabaseSQLite,
     collection_id::String;
@@ -352,6 +412,68 @@ function _add_time_series_row!(
     return nothing
 end
 
+"""
+    add_time_series_row!(db::DatabaseSQLite, collection_id::String, attribute_id::String, label::String, val; dimensions...)
+
+Add or update a value in a time series attribute for a specific element and dimension combination.
+
+This function performs an "upsert" operation - if a row with the specified dimensions already exists,
+it updates the value; otherwise, it inserts a new row.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_id::String`: The identifier of the collection containing the element
+  - `attribute_id::String`: The identifier of the time series attribute
+  - `label::String`: The label of the element to add/update the time series value for
+  - `val`: The value to set for the time series at the specified dimensions
+  - `dimensions...`: Named arguments specifying the dimension values (e.g., `date_time = DateTime(2020, 1, 1)`, `stage = 1`)
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if the attribute is not a time series
+  - `DatabaseException` if the number of dimensions doesn't match the attribute definition
+  - `DatabaseException` if dimension names don't match the attribute definition
+
+# Examples
+
+```julia
+# Add time series value with date_time dimension
+PSRDatabase.add_time_series_row!(
+    db,
+    "Plant",
+    "generation",
+    "Plant 1",
+    100.5;
+    date_time = DateTime(2020, 1, 1),
+)
+
+# Add time series value with multiple dimensions
+PSRDatabase.add_time_series_row!(
+    db,
+    "Plant",
+    "cost",
+    "Plant 1",
+    50.0;
+    date_time = DateTime(2020, 1, 1),
+    stage = 1,
+)
+
+# Update existing time series value (same dimensions)
+PSRDatabase.add_time_series_row!(
+    db,
+    "Plant",
+    "generation",
+    "Plant 1",
+    120.0;
+    date_time = DateTime(2020, 1, 1),  # This will update the existing value
+)
+```
+"""
 function add_time_series_row!(
     db::DatabaseSQLite,
     collection_id::String,
