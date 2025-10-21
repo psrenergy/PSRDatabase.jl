@@ -1,10 +1,4 @@
 using Documenter
-<<<<<<< HEAD
-
-using Pkg
-Pkg.activate(dirname(@__DIR__))
-=======
->>>>>>> 23ff8153db433c0ff2bbd6ebb9747389c0169302
 using PSRDatabase
 
 DocMeta.setdocmeta!(PSRDatabase, :DocTestSetup, :(using PSRDatabase); recursive = true)
@@ -23,7 +17,6 @@ Documenter.makedocs(;
     ),
     pages = [
         "Home" => "index.md",
-<<<<<<< HEAD
         "PSRDatabase Overview" => String[
             "psrdatabase/introduction.md",
             "psrdatabase/rules.md",
@@ -33,8 +26,6 @@ Documenter.makedocs(;
             "sqlite_examples/migrations.md",
         ],
         "API Reference" => "api_reference.md",
-=======
->>>>>>> 23ff8153db433c0ff2bbd6ebb9747389c0169302
     ],
 )
 
