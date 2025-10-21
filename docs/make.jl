@@ -1,18 +1,29 @@
 using Documenter
+<<<<<<< HEAD
 
 using Pkg
 Pkg.activate(dirname(@__DIR__))
+=======
+>>>>>>> 23ff8153db433c0ff2bbd6ebb9747389c0169302
 using PSRDatabase
 
-makedocs(;
+DocMeta.setdocmeta!(PSRDatabase, :DocTestSetup, :(using PSRDatabase); recursive = true)
+
+Documenter.makedocs(;
+    sitename = "PSRDatabase",
     modules = [PSRDatabase],
+    repo = "https://github.com/psrenergy/PSRDatabase.jl/blob/{commit}{path}#{line}",
     doctest = true,
     clean = true,
-    format = Documenter.HTML(; mathengine = Documenter.MathJax2()),
-    sitename = "PSRDatabase.jl",
-    authors = "psrenergy",
+    checkdocs = :none,
+    format = Documenter.HTML(;
+        prettyurls = get(ENV, "CI", "false") == "true",
+        canonical = "https://psrenergy.github.io/PSRDatabase.jl",
+        edit_link = "master",
+    ),
     pages = [
         "Home" => "index.md",
+<<<<<<< HEAD
         "PSRDatabase Overview" => String[
             "psrdatabase/introduction.md",
             "psrdatabase/rules.md",
@@ -22,10 +33,13 @@ makedocs(;
             "sqlite_examples/migrations.md",
         ],
         "API Reference" => "api_reference.md",
+=======
+>>>>>>> 23ff8153db433c0ff2bbd6ebb9747389c0169302
     ],
 )
 
 deploydocs(;
     repo = "github.com/psrenergy/PSRDatabase.jl.git",
+    devbranch = "master",
     push_preview = true,
 )
