@@ -1,4 +1,8 @@
+using Pkg
 using Documenter
+
+Pkg.activate(dirname(@__DIR__))
+
 using PSRDatabase
 
 DocMeta.setdocmeta!(PSRDatabase, :DocTestSetup, :(using PSRDatabase); recursive = true)
