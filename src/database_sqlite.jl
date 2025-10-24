@@ -312,10 +312,10 @@ function _attribute_exists(
 )
     return _is_scalar_parameter(db, collection_id, attribute_id) ||
            _is_vector_parameter(db, collection_id, attribute_id) ||
-            _is_set_parameter(db, collection_id, attribute_id) ||
+           _is_set_parameter(db, collection_id, attribute_id) ||
            _is_scalar_relation(db, collection_id, attribute_id) ||
            _is_vector_relation(db, collection_id, attribute_id) ||
-            _is_set_relation(db, collection_id, attribute_id) ||
+           _is_set_relation(db, collection_id, attribute_id) ||
            _is_time_series(db, collection_id, attribute_id) ||
            _is_time_series_file(db, collection_id, attribute_id)
 end

@@ -159,7 +159,6 @@ function test_read_parameters()
     @test PSRDatabase.read_set_parameters(db, "Plant", "some_other_factor") ==
           [[0.5], Float64[], Float64[], Float64[]]
 
-
     PSRDatabase.update_scalar_parameter!(db, "Plant", "capacity", "Plant 1", 2.0)
     @test PSRDatabase.read_scalar_parameters(db, "Plant", "capacity") ==
           [2.0, 53.0, 54.0, 53.0]
@@ -196,7 +195,7 @@ function test_read_relations()
         label = "Plant 1",
         capacity = 2.02,
         some_factor = [1.0],
-        some_other_factor = [0.5]
+        some_other_factor = [0.5],
     )
     PSRDatabase.create_element!(
         db,
@@ -271,7 +270,7 @@ function test_read_relations()
           ["Cost 1", "Cost 2"]
 
     @test PSRDatabase.read_set_relations(db, "Plant", "Cost", "rel") ==
-          [[ "Cost 1"], ["Cost 1", "Cost 2"], String[]]
+          [["Cost 1"], ["Cost 1", "Cost 2"], String[]]
     PSRDatabase.set_set_relation!(db, "Plant", "Cost", "Plant 1", ["Cost 2"], "rel")
     @test PSRDatabase.read_set_relations(db, "Plant", "Cost", "rel") ==
           [["Cost 2"], ["Cost 1", "Cost 2"], String[]]
