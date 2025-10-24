@@ -363,53 +363,105 @@ function _query_vector(
 end
 
 """
-    end_date_query(db::DatabaseSQLite, attribute::Attribute)
+    read_set_parameters(db::DatabaseSQLite, collection_id::String, attribute_id::String; default::Union{Nothing, Any} = nothing)
 
-Query the maximum (most recent) date available in a time series attribute table.
+Read all values of a set parameter attribute for all elements in a collection.
 
 # Arguments
 
   - `db::DatabaseSQLite`: The database connection
-  - `attribute::Attribute`: The time series attribute
+  - `collection_id::String`: The identifier of the collection
+  - `attribute_id::String`: The identifier of the set parameter attribute to read
+  - `default::Union{Nothing, Any}`: Optional default value to use for missing data. If `nothing`, uses type-specific null values
 
 # Returns
 
-  - `DateTime`: The most recent date in the time series, or `DateTime(0)` if no data exists
+    - `Vector{Vector}`: A vector of vectors, where each inner vector contains the parameter values for one element. Inner vector type matches the attribute type (Float64, Int64, String, or DateTime). Empty vectors are returned for elements with no data.
 """
-function end_date_query(db::DatabaseSQLite, attribute::Attribute)
-    # First checks if the date or dimension value is within the range of the data.
-    # Then it queries the closest date before the provided date.
-    # If there is no date query the data with date 0 (which will probably return no data.)
-    end_date_query = "SELECT MAX(DATE(date_time)) FROM $(attribute.table_where_is_located)"
-    end_date = DBInterface.execute(db.sqlite_db, end_date_query) |> DataFrame
-    if isempty(end_date)
-        return DateTime(0)
+function read_set_parameters(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String;
+    default::Union{Nothing, Any} = nothing,
+)
+    _throw_if_attribute_is_not_set_parameter(
+        db,
+        collection_id,
+        attribute_id,
+        :read,
+    )
+    attribute = _get_attribute(db, collection_id, attribute_id)
+    ids_in_table = read_scalar_parameters(db, collection_id, "id")
+
+    results = Vector{attribute.type}[]
+    for id in ids_in_table
+        push!(results, _query_set(db, attribute, id; default))
     end
-    return DateTime(end_date[!, 1][1])
+
+    return results
 end
 
 """
-    closest_date_query(db::DatabaseSQLite, attribute::Attribute, dim_value::DateTime)
+    read_set_parameter(db::DatabaseSQLite, collection_id::String, attribute_id::String, label::String; default::Union{Nothing, Any} = nothing)
 
-Query the closest date that is less than or equal to the specified date in a time series attribute table.
+Read the values of a set parameter attribute for a specific element identified by label.
 
 # Arguments
 
   - `db::DatabaseSQLite`: The database connection
-  - `attribute::Attribute`: The time series attribute
-  - `dim_value::DateTime`: The target date to search for
+  - `collection_id::String`: The identifier of the collection
+  - `attribute_id::String`: The identifier of the set parameter attribute to read
+  - `label::String`: The label of the element to read from
+  - `default::Union{Nothing, Any}`: Optional default value to use for missing data. If `nothing`, uses type-specific null values
 
 # Returns
 
-  - `DateTime`: The closest date on or before `dim_value`, or `DateTime(0)` if no such date exists
+    - `Vector`: A vector containing the parameter values for the specified element. Type matches the attribute type (Float64, Int64, String, or DateTime). Returns an empty vector if no data exists.
 """
-function closest_date_query(db::DatabaseSQLite, attribute::Attribute, dim_value::DateTime)
-    closest_date_query_earlier = "SELECT DISTINCT date_time FROM $(attribute.table_where_is_located) WHERE $(attribute.id) IS NOT NULL AND DATE(date_time) <= DATE('$(dim_value)') ORDER BY DATE(date_time) DESC LIMIT 1"
-    closest_date = DBInterface.execute(db.sqlite_db, closest_date_query_earlier) |> DataFrame
-    if isempty(closest_date)
-        return DateTime(0)
-    end
-    return DateTime(closest_date[!, 1][1])
+function read_set_parameter(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+    label::String;
+    default::Union{Nothing, Any} = nothing,
+)
+    _throw_if_attribute_is_not_set_parameter(
+        db,
+        collection_id,
+        attribute_id,
+        :read,
+    )
+    attribute = _get_attribute(db, collection_id, attribute_id)
+    id = read_scalar_parameter(db, collection_id, "id", label)
+    return _query_set(db, attribute, id; default)
+end
+
+"""
+    _query_set(db::DatabaseSQLite, attribute::SetParameter, id::Integer; default::Union{Nothing, Any} = nothing)
+
+Internal function to query set parameter values for a specific element.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `attribute::SetParameter`: The set parameter attribute
+  - `id::Integer`: The numeric ID of the element
+  - `default::Union{Nothing, Any}`: Optional default value for missing data
+
+# Returns
+    - `Vector`: The vector of set parameter values, ordered by rowid
+"""
+function _query_set(
+    db::DatabaseSQLite,
+    attribute::SetParameter,
+    id::Integer;
+    default::Union{Nothing, Any} = nothing,
+)
+    query = "SELECT $(attribute.id) FROM $(attribute.table_where_is_located) WHERE id = '$id' ORDER BY rowid"
+    df = DBInterface.execute(db.sqlite_db, query) |> DataFrame
+    results = df[!, 1]
+    results = _treat_query_result(results, attribute, default)
+    return results
 end
 
 """
@@ -726,6 +778,108 @@ function _get_vector_relation_map(
     end
 
     return map_of_vector_with_indexes
+end
+
+"""
+TODO
+"""
+function read_set_relations(
+    db::DatabaseSQLite,
+    collection_from::String,
+    collection_to::String,
+    relation_type::String,
+)
+    map_of_vector_with_indexes = _get_set_relation_map(
+        db,
+        collection_from,
+        collection_to,
+        relation_type,
+    )
+
+    names_in_collection_to = read_scalar_parameters(db, collection_to, "label")
+    num_elements = length(names_in_collection_to)
+    replace_dict = Dict{Any, String}(zip(collect(1:num_elements), names_in_collection_to))
+    push!(replace_dict, _PSRDatabase_null_value(Int) => "")
+
+    map_with_labels = Vector{Vector{String}}(undef, length(map_of_vector_with_indexes))
+
+    for (i, vector_with_indexes) in enumerate(map_of_vector_with_indexes)
+        map_with_labels[i] = replace(vector_with_indexes, replace_dict...)
+    end
+
+    return map_with_labels
+end
+
+"""
+TODO
+"""
+function read_set_relation(
+    db::DatabaseSQLite,
+    collection_from::String,
+    collection_to::String,
+    collection_from_label::String,
+    relation_type::String,
+)
+    relations = read_set_relations(
+        db,
+        collection_from,
+        collection_to,
+        relation_type,
+    )
+    labels_in_collection_from = read_scalar_parameters(db, collection_from, "label")
+    index_of_label = findfirst(isequal(collection_from_label), labels_in_collection_from)
+    return relations[index_of_label]
+end
+
+"""
+TODO
+"""
+function _get_set_relation_map(
+    db::DatabaseSQLite,
+    collection_from::String,
+    collection_to::String,
+    relation_type::String,
+)
+    attribute_on_collection_from = lowercase(collection_to) * "_" * relation_type
+    _throw_if_attribute_is_not_set_relation(
+        db,
+        collection_from,
+        attribute_on_collection_from,
+        :read,
+    )
+    attribute = _get_attribute(db, collection_from, attribute_on_collection_from)
+
+    query = "SELECT id, $(attribute.id) FROM $(attribute.table_where_is_located) ORDER BY id, rowid"
+    df = DBInterface.execute(db.sqlite_db, query) |> DataFrame
+    id = df[!, 1]
+    results = df[!, 2]
+
+    ids_in_collection_from = read_scalar_parameters(db, collection_from, "id")
+    ids_in_collection_to = read_scalar_parameters(db, collection_to, "id")
+    num_ids = length(ids_in_collection_from)
+    map_of_set_with_indexes = Vector{Vector{Int}}(undef, num_ids)
+    for i in 1:num_ids
+        map_of_set_with_indexes[i] = Vector{Int}(undef, 0)
+    end
+
+    num_rows = size(df, 1)
+    for i in 1:num_rows
+        index_of_id = findfirst(isequal(id[i]), ids_in_collection_from)
+        index_of_id_collection_to = findfirst(isequal(results[i]), ids_in_collection_to)
+        if isnothing(index_of_id)
+            continue
+        end
+        if isnothing(index_of_id_collection_to)
+            push!(
+                map_of_set_with_indexes[index_of_id],
+                _PSRDatabase_null_value(Int),
+            )
+        else
+            push!(map_of_set_with_indexes[index_of_id], index_of_id_collection_to)
+        end
+    end
+
+    return map_of_set_with_indexes
 end
 
 """

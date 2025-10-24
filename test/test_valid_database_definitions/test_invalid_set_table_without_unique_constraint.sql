@@ -5,7 +5,6 @@ CREATE TABLE Configuration (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     label TEXT UNIQUE NOT NULL,
     value1 REAL NOT NULL DEFAULT 100,
-    date_initial TEXT,
     enum1 TEXT NOT NULL DEFAULT 'A' CHECK(enum1 IN ('A', 'B', 'C'))
 ) STRICT;
 
@@ -24,18 +23,10 @@ CREATE TABLE Resource_vector_some_group (
     PRIMARY KEY (id, vector_index)
 ) STRICT; 
 
-CREATE TABLE Resource_set_some_other_group (
-    id INTEGER,
-    some_other_value REAL NOT NULL,
-    FOREIGN KEY(id) REFERENCES Resource(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    UNIQUE(id, some_other_value)
-) STRICT;
-
 CREATE TABLE Cost (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     label TEXT UNIQUE NOT NULL,
-    value REAL NOT NULL DEFAULT 100,
-    value_without_default REAL
+    value REAL NOT NULL DEFAULT 100
 ) STRICT;
 
 CREATE TABLE Plant (
@@ -54,23 +45,50 @@ CREATE TABLE Plant_vector_cost_relation (
     id INTEGER,
     vector_index INTEGER NOT NULL,
     some_factor REAL NOT NULL,
-    date_some_date TEXT,
     cost_id INTEGER,
     FOREIGN KEY(id) REFERENCES Plant(id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY(cost_id) REFERENCES Cost(id) ON DELETE SET NULL ON UPDATE CASCADE,
     PRIMARY KEY (id, vector_index)
 ) STRICT;
 
-CREATE TABLE Plant_set_other_cost_relation (
+CREATE TABLE Product (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT UNIQUE NOT NULL,
+    unit TEXT NOT NULL,
+    initial_availability REAL DEFAULT 0.0
+) STRICT;
+
+CREATE TABLE Process (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT UNIQUE NOT NULL
+) STRICT;
+
+CREATE TABLE Process_vector_inputs (
     id INTEGER,
-    some_other_factor REAL NOT NULL,
-    cost_rel INTEGER,
-    FOREIGN KEY(id) REFERENCES Plant(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY(cost_rel) REFERENCES Cost(id) ON DELETE SET NULL ON UPDATE CASCADE,
-    UNIQUE(id, some_other_factor, cost_rel)
+    vector_index INTEGER NOT NULL,
+    factor_input REAL NOT NULL,
+    product_input INTEGER,
+    FOREIGN KEY(product_input) REFERENCES Product(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    PRIMARY KEY (id, vector_index)
+) STRICT;
+
+CREATE TABLE Process_vector_outputs (
+    id INTEGER,
+    vector_index INTEGER NOT NULL,
+    factor_output REAL NOT NULL,
+    product_output INTEGER,
+    FOREIGN KEY(product_output) REFERENCES Product(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    PRIMARY KEY (id, vector_index)
+) STRICT;
+
+CREATE TABLE Process_set_someset (
+    id INTEGER,
+    factor_set REAL NOT NULL,
+    product_set INTEGER,
+    FOREIGN KEY(product_set) REFERENCES Product(id) ON DELETE SET NULL ON UPDATE CASCADE
 ) STRICT;
 
 CREATE TABLE Plant_time_series_files (
-    wind_speed TEXT,
-    wind_direction TEXT
+    generation TEXT,
+    prices TEXT
 ) STRICT;

@@ -14,11 +14,10 @@ CREATE TABLE Resource (
     type TEXT NOT NULL DEFAULT "D" CHECK(type IN ('D', 'E', 'F'))
 ) STRICT;
 
-CREATE TABLE Resource_vector_other_group1 (
+CREATE TABLE Resource_set_some_group (
     id INTEGER, 
-    vector_index INTEGER NOT NULL,
-    date_of_modification TEXT NOT NULL,
-    some_value REAL NOT NULL,
+    some_value_1 REAL NOT NULL,
+    some_value_2 REAL,
     FOREIGN KEY(id) REFERENCES Resource(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    PRIMARY KEY (id, vector_index)
-) STRICT; 
+    UNIQUE (id, some_value_1, some_value_2)
+) STRICT;

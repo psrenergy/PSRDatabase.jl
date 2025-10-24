@@ -21,12 +21,14 @@ function test_read_parameters()
         "Resource";
         label = "Resource 1",
         some_value = [1, 2, 3.0],
+        some_other_value = [4, 5, 6.0],
     )
     PSRDatabase.create_element!(
         db,
         "Resource";
         label = "Resource 2",
         some_value = [1, 2, 4.0],
+        some_other_value = [4, 5, 7.0],
     )
     PSRDatabase.create_element!(db, "Cost"; label = "Cost 1")
     PSRDatabase.create_element!(db, "Cost"; label = "Cost 2", value = 10.0)
@@ -36,6 +38,7 @@ function test_read_parameters()
         label = "Plant 1",
         capacity = 2.02,
         some_factor = [1.0],
+        some_other_factor = [0.5],
         date_some_date = [DateTime(2020, 1, 1)],
     )
     PSRDatabase.create_element!(
@@ -139,6 +142,24 @@ function test_read_parameters()
         "Plant 500",
     )
 
+    # It is a set not a vector
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.read_vector_parameters(
+        db,
+        "Resource",
+        "some_other_value",
+    )
+    @test PSRDatabase.read_set_parameter(db, "Resource", "some_other_value", "Resource 1") ==
+          [4, 5, 6.0]
+    @test PSRDatabase.read_set_parameter(db, "Resource", "some_other_value", "Resource 2") ==
+          [4, 5, 7.0]
+    @test PSRDatabase.read_set_parameters(db, "Resource", "some_other_value") ==
+          [[4, 5, 6.0], [4, 5, 7.0]]
+    @test PSRDatabase.read_set_parameter(db, "Plant", "some_other_factor", "Plant 1") ==
+          [0.5]
+    @test PSRDatabase.read_set_parameters(db, "Plant", "some_other_factor") ==
+          [[0.5], Float64[], Float64[], Float64[]]
+
+
     PSRDatabase.update_scalar_parameter!(db, "Plant", "capacity", "Plant 1", 2.0)
     @test PSRDatabase.read_scalar_parameters(db, "Plant", "capacity") ==
           [2.0, 53.0, 54.0, 53.0]
@@ -175,6 +196,7 @@ function test_read_relations()
         label = "Plant 1",
         capacity = 2.02,
         some_factor = [1.0],
+        some_other_factor = [0.5]
     )
     PSRDatabase.create_element!(
         db,
@@ -182,6 +204,7 @@ function test_read_relations()
         label = "Plant 2",
         capacity = 53.0,
         some_factor = [1.0, 2.0],
+        some_other_factor = [0.7, 0.8],
     )
     PSRDatabase.create_element!(db, "Plant"; label = "Plant 3", capacity = 54.0)
 
@@ -211,6 +234,16 @@ function test_read_relations()
         "id",
     )
 
+    PSRDatabase.set_set_relation!(db, "Plant", "Cost", "Plant 1", ["Cost 1"], "rel")
+    PSRDatabase.set_set_relation!(
+        db,
+        "Plant",
+        "Cost",
+        "Plant 2",
+        ["Cost 1", "Cost 2"],
+        "rel",
+    )
+
     @test PSRDatabase.read_scalar_relations(db, "Plant", "Resource", "id") ==
           ["Resource 1", "", ""]
     @test PSRDatabase.read_scalar_relations(db, "Plant", "Plant", "turbine_to") ==
@@ -235,6 +268,16 @@ function test_read_relations()
     @test PSRDatabase.read_vector_relation(db, "Plant", "Cost", "Plant 1", "id") ==
           ["Cost 2"]
     @test PSRDatabase.read_vector_relation(db, "Plant", "Cost", "Plant 2", "id") ==
+          ["Cost 1", "Cost 2"]
+
+    @test PSRDatabase.read_set_relations(db, "Plant", "Cost", "rel") ==
+          [[ "Cost 1"], ["Cost 1", "Cost 2"], String[]]
+    PSRDatabase.set_set_relation!(db, "Plant", "Cost", "Plant 1", ["Cost 2"], "rel")
+    @test PSRDatabase.read_set_relations(db, "Plant", "Cost", "rel") ==
+          [["Cost 2"], ["Cost 1", "Cost 2"], String[]]
+    @test PSRDatabase.read_set_relation(db, "Plant", "Cost", "Plant 1", "rel") ==
+          ["Cost 2"]
+    @test PSRDatabase.read_set_relation(db, "Plant", "Cost", "Plant 2", "rel") ==
           ["Cost 1", "Cost 2"]
 
     PSRDatabase.close!(db)
