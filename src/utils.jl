@@ -293,6 +293,14 @@ function column_names(db::SQLite.DB, table::String)
     return cols.name
 end
 
+function index_list(db::SQLite.DB, table::String)
+    indices = Vector{String}()
+    for index in SQLite.indexes(db, table)
+        push!(indices, index.name)
+    end
+    return indices
+end
+
 function table_names(db::SQLite.DB)
     tables = Vector{String}()
     for table in SQLite.tables(db)

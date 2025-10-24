@@ -1,0 +1,42 @@
+PRAGMA user_version = 1;
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE Configuration (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT UNIQUE NOT NULL
+) STRICT;
+
+CREATE TABLE Cost (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT UNIQUE NOT NULL
+) STRICT;
+
+CREATE TABLE Resource (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT UNIQUE NOT NULL
+) STRICT;
+
+CREATE TABLE Plant (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT UNIQUE NOT NULL NOT NULL,
+    capacity REAL NOT NULL DEFAULT 0,
+    resource_id INTEGER,
+    FOREIGN KEY(resource_id) REFERENCES Resource(id) ON DELETE SET NULL ON UPDATE CASCADE
+) STRICT;
+
+CREATE TABLE Plant_set_cost_relation (
+    id INTEGER,
+    some_factor REAL NOT NULL,
+    cost_id INTEGER,
+    FOREIGN KEY(id) REFERENCES Plant(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY(cost_id) REFERENCES Cost(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    UNIQUE (id, some_factor, cost_id)
+) STRICT;
+
+CREATE TABLE Plant_set_some_relation_type (
+    id INTEGER,
+    cost_some_relation_type INTEGER,
+    FOREIGN KEY(id) REFERENCES Plant(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY(cost_some_relation_type) REFERENCES Cost(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    UNIQUE (id, cost_some_relation_type)
+) STRICT;

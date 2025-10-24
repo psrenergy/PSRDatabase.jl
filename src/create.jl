@@ -81,6 +81,34 @@ function _create_vector_group!(
     return nothing
 end
 
+function _create_set_group!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    group::String,
+    id::Integer,
+    set_attributes::Vector{String},
+    group_set_attributes,
+)
+    set_group_table_name = _set_group_table_name(collection_id, group)
+    _throw_if_collection_or_attribute_do_not_exist(
+        db,
+        collection_id,
+        set_attributes,
+    )
+    _replace_set_relation_labels_with_ids!(
+        db,
+        collection_id,
+        group_set_attributes,
+    )
+    # No need to check sizes as each set attribute is independent
+    df = DataFrame(group_set_attributes)
+    num_values = size(df, 1)
+    ids = fill(id, num_values)
+    DataFrames.insertcols!(df, 1, :id => ids)
+    _insert_vectors_from_df(db, df, set_group_table_name)
+    return nothing
+end
+
 function _create_vectors!(
     db::DatabaseSQLite,
     collection_id::String,
@@ -108,6 +136,38 @@ function _create_vectors!(
             id,
             vector_attributes,
             group_vector_attributes,
+        )
+    end
+    return nothing
+end
+
+function _create_set_attributes!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    id::Integer,
+    dict_set_attributes,
+)
+    # separate sets by groups
+    map_of_groups_to_set_attributes =
+        _map_of_groups_to_set_attributes(db, collection_id)
+    for (group, set_attributes) in map_of_groups_to_set_attributes
+        group_set_attributes = Dict()
+        for set_attribute in Symbol.(set_attributes)
+            if haskey(dict_set_attributes, set_attribute)
+                group_set_attributes[set_attribute] =
+                    dict_set_attributes[set_attribute]
+            end
+        end
+        if isempty(group_set_attributes)
+            continue
+        end
+        _create_set_group!(
+            db,
+            collection_id,
+            group,
+            id,
+            set_attributes,
+            group_set_attributes,
         )
     end
     return nothing
@@ -142,18 +202,28 @@ function _create_element!(
     _throw_if_collection_does_not_exist(db, collection_id)
     dict_scalar_attributes = Dict{Symbol, Any}()
     dict_vector_attributes = Dict{Symbol, Any}()
+    dict_set_attributes = Dict{Symbol, Any}()
     dict_time_series_attributes = Dict{Symbol, Any}()
 
     # Validate that the arguments will be valid
     for (key, value) in kwargs
         if isa(value, AbstractVector)
-            _throw_if_not_vector_attribute(db, collection_id, string(key))
-            if isempty(value)
-                psr_database_sqlite_error(
-                    "Cannot create the attribute \"$key\" with an empty vector.",
-                )
+            # Check if it is a vector or a set
+            if _is_set_attribute(db, collection_id, string(key))
+                if isempty(value)
+                    psr_database_sqlite_error(
+                        "Cannot create the set attribute \"$key\" with an empty vector.",
+                    )
+                end
+                dict_set_attributes[key] = value
+            elseif _is_vector_attribute(db, collection_id, string(key))
+                if isempty(value)
+                    psr_database_sqlite_error(
+                        "Cannot create the attribute \"$key\" with an empty vector.",
+                    )
+                end
+                dict_vector_attributes[key] = value
             end
-            dict_vector_attributes[key] = value
         elseif isa(value, DataFrame)
             _throw_if_not_time_series_group(db, collection_id, string(key))
             _throw_if_data_does_not_match_group(db, collection_id, string(key), value)
@@ -175,6 +245,7 @@ function _create_element!(
         collection_id,
         dict_scalar_attributes,
         dict_vector_attributes,
+        dict_set_attributes,
     )
 
     _create_scalar_attributes!(db, collection_id, dict_scalar_attributes)
@@ -186,6 +257,15 @@ function _create_element!(
             _get_id(db, collection_id, dict_scalar_attributes[:label]),
         )
         _create_vectors!(db, collection_id, id, dict_vector_attributes)
+    end
+
+    if !isempty(dict_set_attributes)
+        id = get(
+            dict_scalar_attributes,
+            :id,
+            _get_id(db, collection_id, dict_scalar_attributes[:label]),
+        )
+        _create_set_attributes!(db, collection_id, id, dict_set_attributes)
     end
 
     if !isempty(dict_time_series_attributes)
@@ -368,11 +448,34 @@ function _replace_vector_relation_labels_with_ids!(
     return nothing
 end
 
+function _replace_set_relation_labels_with_ids!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    set_attributes,
+)
+    for (key, value) in set_attributes
+        if _is_set_relation(db, collection_id, string(key)) &&
+           isa(value, Vector{String})
+            set_relation = _get_attribute(db, collection_id, string(key))
+            collection_to = set_relation.relation_collection
+            vec_of_ids = fill(_PSRDatabase_null_value(Int), length(value))
+            for (i, v) in enumerate(value)
+                if !_is_null_in_db(v)
+                    vec_of_ids[i] = _get_id(db, collection_to, v)
+                end
+            end
+            set_attributes[key] = vec_of_ids
+        end
+    end
+    return nothing
+end
+
 function _validate_attribute_types_on_creation!(
     db::DatabaseSQLite,
     collection_id::String,
     dict_scalar_attributes::AbstractDict,
     dict_vector_attributes::AbstractDict,
+    dict_set_attributes::AbstractDict,
 )
     label_or_id = _get_label_or_id(collection_id, dict_scalar_attributes)
     _validate_attribute_types!(
@@ -381,6 +484,7 @@ function _validate_attribute_types_on_creation!(
         label_or_id,
         dict_scalar_attributes,
         dict_vector_attributes,
+        dict_set_attributes,
     )
     return nothing
 end

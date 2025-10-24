@@ -104,19 +104,7 @@ CREATE TABLE ThermalPlant_vector_some_group(
 ) STRICT;
 ```
 
-Example of a small time series
-```sql
-CREATE TABLE ThermalPlant_vector_some_group(
-    id INTEGER,
-    vector_index INTEGER NOT NULL,
-    date_of_modification REAL NOT NULL,
-    capacity REAL,
-    FOREIGN KEY (id) REFERENCES ThermalPlant(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    PRIMARY KEY (id, vector_index)
-) STRICT;
-```
-
-A vector relation with another collection should be stored in a table of vector groups and be defined the same way as a vector attribute. To tell that it is a relation with another collection, the name of the relational attribute should be the name of the target collection followed by the relation type defined as `_relation_type`, i.e. `gaugingstation_id` indicated that the collection HydroPlant has an `id` relation with the collection GaugingStation. If the name of the attribute was `gaugingstation_one_to_one`, it would indicate that the collection HydroPlant has a relation `one_to_one` with the collection GaugingStation.
+A vector relation with another collection should be stored in a table of vector groups and be defined the same way as a vector attribute. To tell that it is a relation with another collection, the name of the relational attribute should be the name of the target collection followed by the relation type defined as `_relation_type`, i.e. `gaugingstation_id` indicated that the collection HydroPlant has an `id` relation with the collection GaugingStation. If the name of the attribute was `gaugingstation_turbine_to`, it would indicate that the collection HydroPlant has a relation `turbine_to` with the collection GaugingStation.
 
 ```sql
 CREATE TABLE HydroPlant_vector_GaugingStation(
@@ -166,7 +154,6 @@ CREATE TABLE Resource_time_series_group1 (
 ) STRICT; 
 ```
 
-!!! tip
 For more information on how to handle time series data, please refer to the [Time Series](./time_series.md) section.
 
 ## Migrations

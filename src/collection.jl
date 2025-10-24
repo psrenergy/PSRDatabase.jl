@@ -10,6 +10,8 @@ mutable struct Collection
     scalar_relations::OrderedDict{String, ScalarRelation}
     vector_parameters::OrderedDict{String, VectorParameter}
     vector_relations::OrderedDict{String, VectorRelation}
+    set_parameters::OrderedDict{String, SetParameter}
+    set_relations::OrderedDict{String, SetRelation}
     time_series::OrderedDict{String, TimeSeries}
     time_series_files::OrderedDict{String, TimeSeriesFile}
 end
@@ -28,6 +30,8 @@ function _create_collections_map!(
         scalar_relations = _create_collection_scalar_relations(db, collection_id)
         vector_parameters = _create_collection_vector_parameters(db, collection_id)
         vector_relations = _create_collection_vector_relations(db, collection_id)
+        set_parameters = _create_collection_set_parameters(db, collection_id)
+        set_relations = _create_collection_set_relations(db, collection_id)
         time_series = _create_collection_time_series(db, collection_id)
         time_series_files = _create_collection_time_series_files(db, collection_id)
         collection = Collection(
@@ -36,6 +40,8 @@ function _create_collections_map!(
             scalar_relations,
             vector_parameters,
             vector_relations,
+            set_parameters,
+            set_relations,
             time_series,
             time_series_files,
         )
@@ -240,6 +246,102 @@ function _create_collection_vector_relations(db::SQLite.DB, collection_id::Strin
     return vector_relations
 end
 
+function _create_collection_set_parameters(db::SQLite.DB, collection_id::String)
+    set_attributes_tables = _get_collection_set_attributes_tables(db, collection_id)
+    set_parameters = OrderedDict{String, SetParameter}()
+    parent_collection = collection_id
+
+    for table_name in set_attributes_tables
+        group_id = _id_of_set_group(table_name)
+        table_where_is_located = table_name
+        df_table_infos = table_info(db, table_name)
+        df_foreign_keys_list = foreign_keys_list(db, table_name)
+        for set_attribute in eachrow(df_table_infos)
+            id = set_attribute.name
+            if id == "id"
+                # These are obligatory for every set table
+                continue
+            end
+            if id in df_foreign_keys_list.from
+                # This means that this attribute is a foreign key
+                # and therefore it is a SetRelation
+                # not a SetParameter.
+                continue
+            end
+            type = _sql_type_to_julia_type(id, set_attribute.type)
+            default_value = _get_default_value(type, set_attribute.dflt_value)
+            not_null = Bool(set_attribute.notnull)
+            if haskey(set_parameters, id)
+                psr_database_sqlite_error(
+                    "Duplicated set parameter \"$id\" in collection \"$collection_id\"",
+                )
+            end
+            set_parameters[id] = SetParameter(
+                id,
+                type,
+                default_value,
+                not_null,
+                group_id,
+                parent_collection,
+                table_where_is_located,
+            )
+        end
+    end
+    return set_parameters
+end
+
+function _create_collection_set_relations(db::SQLite.DB, collection_id::String)
+    set_attributes_tables = _get_collection_set_attributes_tables(db, collection_id)
+    set_relations = OrderedDict{String, SetRelation}()
+    parent_collection = collection_id
+    for table_name in set_attributes_tables
+        group_id = _id_of_set_group(table_name)
+        df_table_infos = table_info(db, table_name)
+        df_foreign_keys_list = foreign_keys_list(db, table_name)
+        for foreign_key in eachrow(df_foreign_keys_list)
+            _validate_actions_on_foreign_key(collection_id, table_name, foreign_key)
+            id = foreign_key.from
+            if id == "id"
+                # These are obligatory for every set table
+                continue
+            end
+            # This is not the optimal way of doing
+            # this query but it is fast enough.
+            default_value = nothing
+            not_null = nothing
+            type = nothing
+            for scalar_attribute in eachrow(df_table_infos)
+                if scalar_attribute.name == id
+                    type = _sql_type_to_julia_type(id, scalar_attribute.type)
+                    default_value = _get_default_value(type, scalar_attribute.dflt_value)
+                    not_null = Bool(scalar_attribute.notnull)
+                    break
+                end
+            end
+            relation_type = _get_relation_type_from_attribute_id(id)
+            relation_collection = foreign_key.table
+            table_where_is_located = table_name
+            if haskey(set_relations, id)
+                psr_database_sqlite_error(
+                    "Duplicated set relation \"$id\" in collection \"$collection_id\"",
+                )
+            end
+            set_relations[id] = SetRelation(
+                id,
+                type,
+                default_value,
+                not_null,
+                group_id,
+                parent_collection,
+                relation_collection,
+                relation_type,
+                table_where_is_located,
+            )
+        end
+    end
+    return set_relations
+end
+
 function _get_time_series_dimension_names(df_table_infos::DataFrame)
     dimension_names = Vector{String}(undef, 0)
     for time_series_attribute in eachrow(df_table_infos)
@@ -394,6 +496,21 @@ function _get_collection_vector_attributes_tables(
     return vector_parameters_tables
 end
 
+function _get_collection_set_attributes_tables(
+    sqlite_db::SQLite.DB,
+    collection_id::String,
+)
+    tables = SQLite.tables(sqlite_db)
+    set_attributes_tables = Vector{String}(undef, 0)
+    for table in tables
+        table_name = table.name
+        if _is_collection_set_table_name(table_name, collection_id)
+            push!(set_attributes_tables, table_name)
+        end
+    end
+    return set_attributes_tables
+end
+
 function _get_relation_type_from_attribute_id(attribute_id::String)
     matches = match(r"_(.*)", attribute_id)
     return string(matches.captures[1])
@@ -401,6 +518,11 @@ end
 
 function _id_of_vector_group(table_name::String)
     matches = match(r"_vector_(.*)", table_name)
+    return string(matches.captures[1])
+end
+
+function _id_of_set_group(table_name::String)
+    matches = match(r"_set_(.*)", table_name)
     return string(matches.captures[1])
 end
 

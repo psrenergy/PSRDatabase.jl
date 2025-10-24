@@ -142,6 +142,15 @@ function _is_vector_parameter(
     return haskey(collection.vector_parameters, attribute_id)
 end
 
+function _is_set_parameter(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+)
+    collection = _get_collection(db, collection_id)
+    return haskey(collection.set_parameters, attribute_id)
+end
+
 function _is_scalar_relation(
     db::DatabaseSQLite,
     collection_id::String,
@@ -158,6 +167,15 @@ function _is_vector_relation(
 )
     collection = _get_collection(db, collection_id)
     return haskey(collection.vector_relations, attribute_id)
+end
+
+function _is_set_relation(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+)
+    collection = _get_collection(db, collection_id)
+    return haskey(collection.set_relations, attribute_id)
 end
 
 function _is_time_series(
@@ -192,6 +210,24 @@ function _is_time_series_file(
     return haskey(collection.time_series_files, attribute_id)
 end
 
+function _is_vector_attribute(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+)
+    return _is_vector_parameter(db, collection_id, attribute_id) ||
+           _is_vector_relation(db, collection_id, attribute_id)
+end
+
+function _is_set_attribute(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+)
+    return _is_set_parameter(db, collection_id, attribute_id) ||
+           _is_set_relation(db, collection_id, attribute_id)
+end
+
 _id(attribute::Attribute) = attribute.id
 _type(attribute::Attribute) = attribute.type
 _default_value(attribute::Attribute) = attribute.default_value
@@ -213,10 +249,14 @@ function _get_attribute(
         return collection.scalar_parameters[attribute_id]
     elseif _is_vector_parameter(db, collection_id, attribute_id)
         return collection.vector_parameters[attribute_id]
+    elseif _is_set_parameter(db, collection_id, attribute_id)
+        return collection.set_parameters[attribute_id]
     elseif _is_scalar_relation(db, collection_id, attribute_id)
         return collection.scalar_relations[attribute_id]
     elseif _is_vector_relation(db, collection_id, attribute_id)
         return collection.vector_relations[attribute_id]
+    elseif _is_set_relation(db, collection_id, attribute_id)
+        return collection.set_relations[attribute_id]
     elseif _is_time_series(db, collection_id, attribute_id)
         return collection.time_series[attribute_id]
     elseif _is_time_series_file(db, collection_id, attribute_id)
@@ -240,6 +280,10 @@ function _string_for_composite_types(composite_type::Type)
         return "vector parameter"
     elseif composite_type <: VectorRelation
         return "vector relation"
+    elseif composite_type <: SetParameter
+        return "set parameter"
+    elseif composite_type <: SetRelation
+        return "set relation"
     elseif composite_type <: TimeSeries
         return "time series"
     elseif composite_type <: TimeSeriesFile
@@ -268,8 +312,10 @@ function _attribute_exists(
 )
     return _is_scalar_parameter(db, collection_id, attribute_id) ||
            _is_vector_parameter(db, collection_id, attribute_id) ||
+           _is_set_parameter(db, collection_id, attribute_id) ||
            _is_scalar_relation(db, collection_id, attribute_id) ||
            _is_vector_relation(db, collection_id, attribute_id) ||
+           _is_set_relation(db, collection_id, attribute_id) ||
            _is_time_series(db, collection_id, attribute_id) ||
            _is_time_series_file(db, collection_id, attribute_id)
 end
@@ -305,6 +351,37 @@ function _map_of_groups_to_vector_attributes(
     return map_of_groups_to_vector_attributes
 end
 
+function _map_of_groups_to_set_attributes(
+    db::DatabaseSQLite,
+    collection_id::String,
+)
+    collection = _get_collection(db, collection_id)
+    groups = Set{String}()
+    for (_, attribute) in collection.set_parameters
+        push!(groups, attribute.group_id)
+    end
+    for (_, attribute) in collection.set_relations
+        push!(groups, attribute.group_id)
+    end
+
+    map_of_groups_to_set_attributes = Dict{String, Vector{String}}()
+    for group in groups
+        map_of_groups_to_set_attributes[group] = Vector{String}(undef, 0)
+        for (_, attribute) in collection.set_parameters
+            if attribute.group_id == group
+                push!(map_of_groups_to_set_attributes[group], attribute.id)
+            end
+        end
+        for (_, attribute) in collection.set_relations
+            if attribute.group_id == group
+                push!(map_of_groups_to_set_attributes[group], attribute.id)
+            end
+        end
+    end
+
+    return map_of_groups_to_set_attributes
+end
+
 function _attributes_in_time_series_group(
     db::DatabaseSQLite,
     collection_id::String,
@@ -324,6 +401,10 @@ function _vectors_group_table_name(collection_id::String, group::String)
     return string(collection_id, "_vector_", group)
 end
 
+function _set_group_table_name(collection_id::String, group::String)
+    return string(collection_id, "_set_", group)
+end
+
 function _time_series_group_table_name(collection_id::String, group::String)
     return string(collection_id, "_time_series_", group)
 end
@@ -335,6 +416,10 @@ end
 
 function _is_collection_vector_table_name(name::String, collection_id::String)
     return startswith(name, "$(collection_id)_vector_")
+end
+
+function _is_collection_set_table_name(name::String, collection_id::String)
+    return startswith(name, "$(collection_id)_set_")
 end
 
 function _is_collection_time_series_table_name(name::String, collection_id::String)

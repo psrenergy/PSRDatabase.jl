@@ -18,6 +18,14 @@ _is_valid_table_vector_name(table::String) =
         ),
     )
 
+_is_valid_table_set_name(table::String) =
+    !isnothing(
+        match(
+            r"^(?:[A-Z][a-z]*)+_set_[a-z][a-z0-9]*(?:_{1}[a-z0-9]+)*$",
+            table,
+        ),
+    )
+
 _is_valid_time_series_name(table::String) =
     !isnothing(
         match(
@@ -119,6 +127,35 @@ function _validate_vector_table(db::SQLite.DB, table::String)
     return num_errors
 end
 
+function _validate_set_table(db::SQLite.DB, table::String)
+    attributes = column_names(db, table)
+    num_errors = 0
+    if !("id" in attributes)
+        @error("Table $table is a set table and does not have an \"id\" column.")
+        num_errors += 1
+    end
+
+    index_list = DBInterface.execute(db, "PRAGMA index_list($table);") |> DataFrame
+    # Check that the table has at least one unique constraint
+    if isempty(index_list)
+        @error(
+            "Table $table is a set table but does not have any unique constraints.",
+        )
+        num_errors += 1
+    end
+    # Check that we have a unique constraint on every column
+    for index in index_list.name
+        index_info = DBInterface.execute(db, "PRAGMA index_info($index);") |> DataFrame
+        if Set(index_info.name) != Set(attributes)
+            @error(
+                "Table $table is a set table but does not have a unique constraint on all its columns.",
+            )
+            num_errors += 1
+        end
+    end
+    return num_errors
+end
+
 function _validate_column_name(table::String, column::String)
     num_errors = 0
     if !_is_valid_column_name(column)
@@ -152,12 +189,15 @@ function _validate_database(db::SQLite.DB)
             num_errors += _validate_time_series_table(db, table)
         elseif _is_valid_table_vector_name(table)
             num_errors += _validate_vector_table(db, table)
+        elseif _is_valid_table_set_name(table)
+            num_errors += _validate_set_table(db, table)
         else
             @error("""
                 Invalid table name: $table.
                 Valid table name formats are:
                 - Collections: NameOfCollection
                 - Vector attributes: NameOfCollection_vector_group_id
+                - Set attributes: NameOfCollection_set_group_id
                 - Time series: NameOfCollection_time_series_group_id
                 - Time series files: NameOfCollection_time_series_files
                 """)
@@ -230,6 +270,26 @@ function _throw_if_attribute_is_not_vector_parameter(
     return nothing
 end
 
+function _throw_if_attribute_is_not_set_parameter(
+    db::DatabaseSQLite,
+    collection::String,
+    attribute::String,
+    action::Symbol,
+)
+    _throw_if_collection_or_attribute_do_not_exist(db, collection, attribute)
+
+    if !_is_set_parameter(db, collection, attribute)
+        correct_composity_type =
+            _attribute_composite_type(db, collection, attribute)
+        string_of_composite_types = _string_for_composite_types(correct_composity_type)
+        correct_method_to_use = _get_correct_method_to_use(correct_composity_type, action)
+        psr_database_sqlite_error(
+            "Attribute \"$attribute\" is not a set parameter. It is a $string_of_composite_types. Use `$correct_method_to_use` instead.",
+        )
+    end
+    return nothing
+end
+
 function _throw_if_attribute_is_not_scalar_relation(
     db::DatabaseSQLite,
     collection::String,
@@ -265,6 +325,26 @@ function _throw_if_attribute_is_not_vector_relation(
         correct_method_to_use = _get_correct_method_to_use(correct_composity_type, action)
         psr_database_sqlite_error(
             "Attribute \"$attribute\" is not a vector relation. It is a $string_of_composite_types. Use `$correct_method_to_use` instead.",
+        )
+    end
+    return nothing
+end
+
+function _throw_if_attribute_is_not_set_relation(
+    db::DatabaseSQLite,
+    collection::String,
+    attribute::String,
+    action::Symbol,
+)
+    _throw_if_collection_or_attribute_do_not_exist(db, collection, attribute)
+
+    if !_is_set_relation(db, collection, attribute)
+        correct_composity_type =
+            _attribute_composite_type(db, collection, attribute)
+        string_of_composite_types = _string_for_composite_types(correct_composity_type)
+        correct_method_to_use = _get_correct_method_to_use(correct_composity_type, action)
+        psr_database_sqlite_error(
+            "Attribute \"$attribute\" is not a set relation. It is a $string_of_composite_types. Use `$correct_method_to_use` instead.",
         )
     end
     return nothing
@@ -321,23 +401,6 @@ function _throw_if_not_scalar_attribute(
        !_is_scalar_relation(db, collection, attribute)
         psr_database_sqlite_error(
             "Attribute \"$attribute\" is not a scalar attribute. You must input a vector for this attribute.",
-        )
-    end
-
-    return nothing
-end
-
-function _throw_if_not_vector_attribute(
-    db::DatabaseSQLite,
-    collection::String,
-    attribute::String,
-)
-    _throw_if_collection_or_attribute_do_not_exist(db, collection, attribute)
-
-    if _is_scalar_parameter(db, collection, attribute) ||
-       _is_scalar_relation(db, collection, attribute)
-        psr_database_sqlite_error(
-            "Attribute \"$attribute\" is not a vector attribute. You must input a scalar for this attribute.",
         )
     end
 
@@ -434,6 +497,7 @@ function _validate_attribute_types!(
     label_or_id::Union{Integer, String},
     dict_scalar_attributes::AbstractDict,
     dict_vector_attributes::AbstractDict,
+    dict_set_attributes::AbstractDict,
 )
     for (key, value) in dict_scalar_attributes
         attribute = _get_attribute(db, collection_id, string(key))
@@ -449,6 +513,14 @@ function _validate_attribute_types!(
             _validate_vector_relation_type(attribute, label_or_id, value)
         else
             _validate_vector_parameter_type(attribute, label_or_id, value)
+        end
+    end
+    for (key, value) in dict_set_attributes
+        attribute = _get_attribute(db, collection_id, string(key))
+        if isa(attribute, SetRelation)
+            _validate_set_relation_type(attribute, label_or_id, value)
+        else
+            _validate_set_parameter_type(attribute, label_or_id, value)
         end
     end
     return nothing
@@ -495,6 +567,32 @@ end
 
 function _validate_vector_relation_type(
     attribute::VectorRelation,
+    label_or_id::Union{Integer, String},
+    values::Vector{<:Any},
+)
+    if !isa(values, Vector{String}) && !isa(values, Vector{Int64})
+        psr_database_sqlite_error(
+            "The value of the attribute \"$(attribute.id)\" in element \"$label_or_id\" " *
+            "of collection \"$(attribute.parent_collection)\" should be of type Vector{String} or Vector{Int64}. User inputed $(typeof(values)): $values.",
+        )
+    end
+end
+
+function _validate_set_parameter_type(
+    attribute::SetParameter,
+    label_or_id::Union{Integer, String},
+    values::Vector{<:Any},
+)
+    if !isa(values, Vector{attribute.type})
+        psr_database_sqlite_error(
+            "The value of the attribute \"$(attribute.id)\" in element \"$label_or_id\" " *
+            "of collection \"$(attribute.parent_collection)\" should be of type Vector{$(attribute.type)}. User inputed $(typeof(values)): $values.",
+        )
+    end
+end
+
+function _validate_set_relation_type(
+    attribute::SetRelation,
     label_or_id::Union{Integer, String},
     values::Vector{<:Any},
 )

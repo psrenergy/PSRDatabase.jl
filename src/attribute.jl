@@ -7,6 +7,7 @@ abstract type Attribute end
 
 abstract type ScalarAttribute <: Attribute end
 abstract type VectorAttribute <: Attribute end
+abstract type SetAttribute <: Attribute end
 abstract type ReferenceToFileAttribute <: Attribute end
 
 mutable struct ScalarParameter{T} <: ScalarAttribute
@@ -109,6 +110,53 @@ mutable struct TimeSeries{T} <: VectorAttribute
     table_where_is_located::String
     dimension_names::Vector{String}
     num_dimensions::Int
+end
+
+mutable struct SetParameter{T} <: SetAttribute
+    id::String
+    type::Type{T}
+    default_value::Union{Missing, T}
+    not_null::Bool
+    group_id::String
+    parent_collection::String
+    table_where_is_located::String
+end
+
+mutable struct SetRelation{T} <: SetAttribute
+    id::String
+    type::Type{T}
+    default_value::Union{Missing, T}
+    not_null::Bool
+    group_id::String
+    parent_collection::String
+    relation_collection::String
+    relation_type::String
+    table_where_is_located::String
+
+    function SetRelation(
+        id::String,
+        type::Type{T},
+        default_value::Union{Missing, T},
+        not_null::Bool,
+        group_id::String,
+        parent_collection::String,
+        relation_collection::String,
+        relation_type::String,
+        table_where_is_located::String,
+    ) where {T}
+        _check_valid_relation_name(id, relation_collection)
+        return new{T}(
+            id,
+            type,
+            default_value,
+            not_null,
+            group_id,
+            parent_collection,
+            relation_collection,
+            relation_type,
+            table_where_is_located,
+        )
+    end
 end
 
 mutable struct TimeSeriesFile{T} <: ReferenceToFileAttribute

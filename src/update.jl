@@ -8,6 +8,8 @@ const UPDATE_METHODS_BY_CLASS_OF_ATTRIBUTE = Dict(
     ScalarRelation => "set_scalar_relation!",
     VectorParameter => "update_vector_parameters!",
     VectorRelation => "set_vector_relation!",
+    SetParameter => "update_set_parameters!",
+    SetRelation => "set_set_relation!",
     TimeSeries => "update_time_series_row!",
     TimeSeriesFile => "set_time_series_file!",
 )
@@ -204,6 +206,83 @@ function _update_vector_parameters!(
             DBInterface.execute(
                 db.sqlite_db,
                 "UPDATE $table_name SET $attribute_id = '$val' WHERE id = '$id' AND vector_index = '$i'",
+            )
+        end
+    end
+    return nothing
+end
+
+function update_set_parameters!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+    label::String,
+    vals::Vector,
+)
+    _throw_if_collection_or_attribute_do_not_exist(
+        db,
+        collection_id,
+        attribute_id,
+    )
+    _throw_if_attribute_is_not_set_parameter(
+        db,
+        collection_id,
+        attribute_id,
+        :update,
+    )
+    attribute = _get_attribute(db, collection_id, attribute_id)
+    _validate_set_parameter_type(attribute, label, vals)
+    id = _get_id(db, collection_id, label)
+    return _update_set_parameters!(db, collection_id, attribute_id, id, vals)
+end
+
+function _update_set_parameters!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+    id::Integer,
+    vals::Vector,
+)
+    attribute = _get_attribute(db, collection_id, attribute_id)
+    group_id = attribute.group_id
+    table_name = attribute.table_where_is_located
+    num_new_elements = length(vals)
+    df_num_rows =
+        DBInterface.execute(
+            db.sqlite_db,
+            "SELECT $(attribute_id) FROM $table_name WHERE id = '$id'",
+        ) |> DataFrame
+    num_rows_in_query = size(df_num_rows, 1)
+    if num_rows_in_query != num_new_elements
+        if num_rows_in_query == 0
+            # If there are no rows in the table we can create them
+            _create_set_attributes!(
+                db,
+                collection_id,
+                id,
+                Dict(Symbol(attribute_id) => vals),
+            )
+        else
+            # If there are rows in the table we must check that the number of rows is the same as the number of new relations
+            psr_database_sqlite_error(
+                "There is currently a vector of $num_rows_in_query elements in the group $group_id. " *
+                "User is trying to set a vector of length $num_new_elements. This is invalid. " *
+                "If you want to change the number of elements in the group you might have to delete " *
+                "the element and create it again with the new vector.",
+            )
+        end
+    else
+        # Query the rowids to update
+        df_rowids =
+            DBInterface.execute(
+                db.sqlite_db,
+                "SELECT rowid FROM $table_name WHERE id = '$id'",
+            ) |> DataFrame
+        # Update the elements
+        for (rowid, val) in zip(df_rowids.rowid, vals)
+            DBInterface.execute(
+                db.sqlite_db,
+                "UPDATE $table_name SET $attribute_id = '$val' WHERE id = '$id' AND rowid = '$rowid'",
             )
         end
     end
@@ -475,6 +554,100 @@ function set_vector_relation!(
                 DBInterface.execute(
                     db.sqlite_db,
                     "UPDATE $table_name SET $attribute_id = '$id_collection_to' WHERE id = '$id_collection_from' AND vector_index = '$i'",
+                )
+            end
+        end
+    end
+    return nothing
+end
+
+function set_set_relation!(
+    db::DatabaseSQLite,
+    collection_from::String,
+    collection_to::String,
+    label_collection_from::String,
+    labels_collection_to::Vector{String},
+    relation_type::String,
+)
+    attribute_id = lowercase(collection_to) * "_" * relation_type
+    _throw_if_attribute_is_not_set_relation(
+        db,
+        collection_from,
+        attribute_id,
+        :update,
+    )
+    id_collection_from = _get_id(db, collection_from, label_collection_from)
+    ids_collection_to = fill(_PSRDatabase_null_value(Int), length(labels_collection_to))
+    for (i, label) in enumerate(labels_collection_to)
+        if !_is_null_in_db(label)
+            ids_collection_to[i] = _get_id(db, collection_to, label)
+        end
+    end
+    set_set_relation!(
+        db,
+        collection_from,
+        collection_to,
+        id_collection_from,
+        ids_collection_to,
+        relation_type,
+    )
+    return nothing
+end
+
+function set_set_relation!(
+    db::DatabaseSQLite,
+    collection_from::String,
+    collection_to::String,
+    id_collection_from::Integer,
+    ids_collection_to::Vector{<:Integer},
+    relation_type::String,
+)
+    if collection_from == collection_to && id_collection_from in ids_collection_to
+        psr_database_sqlite_error("Cannot set a relation between the same element.")
+    end
+    attribute_id = lowercase(collection_to) * "_" * relation_type
+    attribute = _get_attribute(db, collection_from, attribute_id)
+    group_id = attribute.group_id
+    table_name = attribute.table_where_is_located
+    num_new_relations = length(ids_collection_to)
+    df_num_rows =
+        DBInterface.execute(
+            db.sqlite_db,
+            "SELECT $(attribute_id) FROM $table_name WHERE id = '$id_collection_from'",
+        ) |> DataFrame
+    num_rows_in_query = size(df_num_rows, 1)
+    if num_rows_in_query != num_new_relations
+        if num_rows_in_query == 0
+            # If there are no rows in the table we can create them
+            _create_set_attributes!(
+                db,
+                collection_from,
+                id_collection_from,
+                Dict(Symbol(attribute_id) => ids_collection_to),
+            )
+        else
+            # If there are rows in the table we must check that the number of rows is the same as the number of new relations
+            psr_database_sqlite_error(
+                "There is currently a vector of $num_rows_in_query elements in the group $group_id. " *
+                "User is trying to set a vector of $num_new_relations relations. This is invalid. " *
+                "If you want to change the number of elements in the group you might have to update " *
+                "the vectors in the group before setting this relation. Another option is to delete " *
+                "the element and create it again with the new vector.",
+            )
+        end
+    else
+        # Query the rowids to update
+        df_rowids =
+            DBInterface.execute(
+                db.sqlite_db,
+                "SELECT rowid FROM $table_name WHERE id = '$id_collection_from'",
+            ) |> DataFrame
+        # Update the elements
+        for (rowid, id_collection_to) in zip(df_rowids.rowid, ids_collection_to)
+            if !_is_null_in_db(id_collection_to)
+                DBInterface.execute(
+                    db.sqlite_db,
+                    "UPDATE $table_name SET $attribute_id = '$id_collection_to' WHERE id = '$id_collection_from' AND rowid = '$rowid'",
                 )
             end
         end
