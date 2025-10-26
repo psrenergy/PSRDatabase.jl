@@ -617,7 +617,7 @@ Read all vector relation mappings from one collection to another.
   - `db::DatabaseSQLite`: The database connection
   - `collection_from::String`: The identifier of the source collection
   - `collection_to::String`: The identifier of the target collection
-  - `relation_type::String`: The type of relation (e.g., "id", "group")
+  - `relation_type::String`: The type of relation 
 
 # Returns
 
@@ -679,7 +679,7 @@ Read the vector relation mapping for a specific element from one collection to a
   - `collection_from::String`: The identifier of the source collection
   - `collection_to::String`: The identifier of the target collection
   - `collection_from_label::String`: The label of the element in the source collection
-  - `relation_type::String`: The type of relation (e.g., "id", "group")
+  - `relation_type::String`: The type of relation 
 
 # Returns
 
@@ -781,7 +781,34 @@ function _get_vector_relation_map(
 end
 
 """
-TODO
+    read_set_relation(db::DatabaseSQLite, collection_from::String, collection_to::String, collection_from_label::String, relation_type::String)
+
+Read the set relation mapping for a specific element from one collection to another.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_from::String`: The identifier of the source collection
+  - `collection_to::String`: The identifier of the target collection
+  - `collection_from_label::String`: The label of the element in the source collection
+  - `relation_type::String`: The type of relation 
+
+# Returns
+
+  - `Vector{String}`: A vector of labels from `collection_to` that the specified element relates to. Returns an empty vector if no relations exist. Empty strings within the vector indicate null relations.
+
+# Examples
+
+```julia
+# Get which costs "Plant 1" is associated with
+costs = PSRDatabase.read_set_relations(db, "Plant", "Cost", "Plant 1", "id")  # ["Cost 2"]
+
+# Get multiple related elements
+costs = PSRDatabase.read_set_relations(db, "Plant", "Cost", "Plant 2", "id")  # ["Cost 1", "Cost 2"]
+
+# Element with no relations
+costs = PSRDatabase.read_set_relations(db, "Plant", "Cost", "Plant 3", "id")  # String[]
+```
 """
 function read_set_relations(
     db::DatabaseSQLite,
@@ -811,7 +838,32 @@ function read_set_relations(
 end
 
 """
-TODO
+    read_set_relation(db::DatabaseSQLite, collection_from::String, collection_to::String, collection_from_label::String, relation_type::String)
+
+Read the set relation mapping for a specific element from one collection to another.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_from::String`: The identifier of the source collection
+  - `collection_to::String`: The identifier of the target collection
+  - `collection_from_label::String`: The label of the element in the source collection
+  - `relation_type::String`: The type of relation 
+
+# Returns
+
+    - `Vector{String}`: A vector of labels from `collection_to` that the specified element relates to. Returns an empty vector if no relations exist. Empty strings within the vector indicate null relations.
+
+# Examples
+
+```julia
+# Get which costs "Plant 1" is associated with
+costs = PSRDatabase.read_set_relation(db, "Plant", "Cost", "Plant 1", "id")  # ["Cost 2"]
+# Get multiple related elements
+costs = PSRDatabase.read_set_relation(db, "Plant", "Cost", "Plant 2", "id")  # ["Cost 1", "Cost 2"]
+# Element with no relations
+costs = PSRDatabase.read_set_relation(db, "Plant", "Cost", "Plant 3", "id")  # String[]
+```
 """
 function read_set_relation(
     db::DatabaseSQLite,
@@ -832,7 +884,20 @@ function read_set_relation(
 end
 
 """
-TODO
+    _get_set_relation_map(db::DatabaseSQLite, collection_from::String, collection_to::String, relation_type::String)
+
+Internal function to retrieve the set relation mapping as a vector of index vectors.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_from::String`: The identifier of the source collection
+  - `collection_to::String`: The identifier of the target collection
+  - `relation_type::String`: The type of relation
+
+# Returns
+
+    - `Vector{Vector{Int}}`: A vector of vectors of indices mapping each element in `collection_from` to elements in `collection_to`
 """
 function _get_set_relation_map(
     db::DatabaseSQLite,
