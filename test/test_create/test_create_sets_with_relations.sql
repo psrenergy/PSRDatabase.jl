@@ -23,6 +23,7 @@ CREATE TABLE Process_set_someset (
     id INTEGER,
     factor REAL NOT NULL,
     product_set INTEGER,
+    FOREIGN KEY(id) REFERENCES Process(id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY(product_set) REFERENCES Product(id) ON DELETE SET NULL ON UPDATE CASCADE,
     UNIQUE(id, factor, product_set)
 ) STRICT;

@@ -4,9 +4,9 @@ using PSRDatabase
 using SQLite
 using Test
 
-function test_create_scalar_relations()
-    path_schema = joinpath(@__DIR__, "test_create_scalar_relations.sql")
-    db_path = joinpath(@__DIR__, "test_create_scalar_relations.sqlite")
+function test_update_scalar_relations()
+    path_schema = joinpath(@__DIR__, "test_update_scalar_relations.sql")
+    db_path = joinpath(@__DIR__, "test_update_scalar_relations.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
     PSRDatabase.create_element!(db, "Resource"; label = "Resource 1", type = "E")
@@ -143,9 +143,9 @@ function test_create_scalar_relations()
     return rm(db_path)
 end
 
-function test_create_vector_relations()
-    path_schema = joinpath(@__DIR__, "test_create_vector_relations.sql")
-    db_path = joinpath(@__DIR__, "test_create_vector_relations.sqlite")
+function test_update_vector_relations()
+    path_schema = joinpath(@__DIR__, "test_update_vector_relations.sql")
+    db_path = joinpath(@__DIR__, "test_update_vector_relations.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case")
     PSRDatabase.create_element!(db, "Cost"; label = "Cost 1")
@@ -216,9 +216,9 @@ function test_create_vector_relations()
     return rm(db_path)
 end
 
-function test_create_set_relations()
-    path_schema = joinpath(@__DIR__, "test_create_set_relations.sql")
-    db_path = joinpath(@__DIR__, "test_create_set_relations.sqlite")
+function test_update_set_relations()
+    path_schema = joinpath(@__DIR__, "test_update_set_relations.sql")
+    db_path = joinpath(@__DIR__, "test_update_set_relations.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case")
     PSRDatabase.create_element!(db, "Cost"; label = "Cost 1")
@@ -459,9 +459,9 @@ function test_update_set_parameters()
     return rm(db_path)
 end
 
-function test_create_time_series_files()
-    path_schema = joinpath(@__DIR__, "test_create_time_series_files.sql")
-    db_path = joinpath(@__DIR__, "test_create_time_series_files.sqlite")
+function test_update_time_series_files()
+    path_schema = joinpath(@__DIR__, "test_update_time_series_files.sql")
+    db_path = joinpath(@__DIR__, "test_update_time_series_files.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
     PSRDatabase.create_element!(db, "Resource"; label = "Resource 1")
@@ -547,7 +547,7 @@ end
 
 function test_update_vector_with_empty_relations_id()
     path_schema = joinpath(dirname(@__DIR__), "test_create", "test_create_vectors_with_empty_relations.sql")
-    db_path = joinpath(@__DIR__, "test_update_vectors_with_empty_relations.sqlite")
+    db_path = joinpath(@__DIR__, "test_create_vectors_with_empty_relations.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
 
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case")
@@ -584,7 +584,7 @@ end
 
 function test_update_vector_with_empty_relations_string()
     path_schema = joinpath(dirname(@__DIR__), "test_create", "test_create_vectors_with_empty_relations.sql")
-    db_path = joinpath(@__DIR__, "test_update_vectors_with_empty_relations.sqlite")
+    db_path = joinpath(@__DIR__, "test_create_vectors_with_empty_relations.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
 
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case")
