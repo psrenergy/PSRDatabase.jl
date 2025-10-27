@@ -1,6 +1,6 @@
 name = "PSRDatabase"
 uuid = "d9b62651-08e5-4754-bb8c-8acb2abbd08d"
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
