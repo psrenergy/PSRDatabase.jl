@@ -101,6 +101,60 @@ function test_create_parameters_and_vectors()
     return nothing
 end
 
+function test_create_sets_with_relations()
+    path_schema = joinpath(@__DIR__, "test_create_sets_with_relations.sql")
+    db_path = joinpath(@__DIR__, "test_create_sets_with_relations.sqlite")
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(
+        db,
+        "Configuration";
+        label = "Toy Case",
+        some_value = 1.0,
+    )
+    PSRDatabase.create_element!(db, "Product"; label = "Sugar", unit = "Kg")
+    PSRDatabase.create_element!(db, "Product"; label = "Sugarcane", unit = "ton")
+    PSRDatabase.create_element!(db, "Product"; label = "Molasse", unit = "ton")
+    PSRDatabase.create_element!(db, "Product"; label = "Bagasse", unit = "ton")
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.create_element!(
+        db,
+        "Product",
+        label = "Bagasse 2",
+        unit = 30,
+    )
+    PSRDatabase.create_element!(db, "Process";
+        label = "Sugar Mill",
+        product_set = ["Sugarcane"],
+        factor = [1.0],
+    )
+
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.create_element!(db,
+        "Process";
+        label = "Sugar Mill 2",
+        product_set = ["Sugar"],
+        factor = ["wrong"],
+    )
+
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.create_element!(db,
+        "Process";
+        label = "Sugar Mill 3",
+        product_set = ["Some Sugar"],
+        factor = [1.0],
+    )
+
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.create_element!(db,
+        "Process";
+        label = "Sugar Mill 3",
+        product_set = ["Sugear"],
+        factor = [],
+    )
+
+    PSRDatabase.close!(db)
+    GC.gc()
+    GC.gc()
+    rm(db_path)
+    @test true
+end
+
 function test_create_with_transaction()
     path_schema = joinpath(@__DIR__, "test_create_parameters_and_vectors.sql")
     db_path = joinpath(@__DIR__, "test_create_parameters_and_vectors.sqlite")
@@ -176,31 +230,6 @@ function test_create_scalar_parameter_date()
     rm(db_path)
     @test true
     return nothing
-end
-
-function test_create_small_time_series_as_vectors()
-    path_schema = joinpath(@__DIR__, "test_create_small_time_series_as_vectors.sql")
-    db_path = joinpath(@__DIR__, "test_create_small_time_series_as_vectors.sqlite")
-    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
-    PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
-    PSRDatabase.create_element!(
-        db,
-        "Resource";
-        label = "Resource 1",
-        type = "E",
-        date_of_modification = [DateTime(2000), DateTime(2001)],
-        some_value = [1.0, 2.0],
-    )
-    PSRDatabase.create_element!(
-        db,
-        "Resource";
-        label = "Resource 2",
-        type = "E",
-        date_of_modification = [DateTime(2002), DateTime(2001)],
-        some_value = [1.0, 2.0],
-    )
-    PSRDatabase.close!(db)
-    return rm(db_path)
 end
 
 function test_create_vectors_with_relations()

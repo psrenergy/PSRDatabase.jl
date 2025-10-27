@@ -154,6 +154,30 @@ function test_invalid_database_without_label_constraints()
     return nothing
 end
 
+function test_invalid_set_table_not_all_unique()
+    path_schema = joinpath(@__DIR__, "test_invalid_set_table_not_all_unique.sql")
+    db_path = joinpath(@__DIR__, "test_invalid_set_table_not_all_unique.sqlite")
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.create_empty_db_from_schema(
+        db_path,
+        path_schema;
+        force = true,
+    )
+    rm(db_path)
+    return nothing
+end
+
+function test_invalid_set_table_without_unique_constraint()
+    path_schema = joinpath(@__DIR__, "test_invalid_set_table_without_unique_constraint.sql")
+    db_path = joinpath(@__DIR__, "test_invalid_set_table_without_unique_constraint.sqlite")
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.create_empty_db_from_schema(
+        db_path,
+        path_schema;
+        force = true,
+    )
+    rm(db_path)
+    return nothing
+end
+
 function runtests()
     Base.GC.gc()
     Base.GC.gc()

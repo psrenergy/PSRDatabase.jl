@@ -4,9 +4,9 @@ using PSRDatabase
 using SQLite
 using Test
 
-function test_create_scalar_relations()
-    path_schema = joinpath(@__DIR__, "test_create_scalar_relations.sql")
-    db_path = joinpath(@__DIR__, "test_create_scalar_relations.sqlite")
+function test_update_scalar_relations()
+    path_schema = joinpath(@__DIR__, "test_update_scalar_relations.sql")
+    db_path = joinpath(@__DIR__, "test_update_scalar_relations.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
     PSRDatabase.create_element!(db, "Resource"; label = "Resource 1", type = "E")
@@ -143,9 +143,9 @@ function test_create_scalar_relations()
     return rm(db_path)
 end
 
-function test_create_vector_relations()
-    path_schema = joinpath(@__DIR__, "test_create_vector_relations.sql")
-    db_path = joinpath(@__DIR__, "test_create_vector_relations.sqlite")
+function test_update_vector_relations()
+    path_schema = joinpath(@__DIR__, "test_update_vector_relations.sql")
+    db_path = joinpath(@__DIR__, "test_update_vector_relations.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case")
     PSRDatabase.create_element!(db, "Cost"; label = "Cost 1")
@@ -204,6 +204,79 @@ function test_create_vector_relations()
         "some_relation_type",
     )
     @test_throws PSRDatabase.DatabaseException PSRDatabase.set_vector_relation!(
+        db,
+        "Plant",
+        "Cost",
+        "Plant 2",
+        ["Cost 1", "Cost 2", "Cost 3"],
+        "wrong",
+    )
+
+    PSRDatabase.close!(db)
+    return rm(db_path)
+end
+
+function test_update_set_relations()
+    path_schema = joinpath(@__DIR__, "test_update_set_relations.sql")
+    db_path = joinpath(@__DIR__, "test_update_set_relations.sqlite")
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case")
+    PSRDatabase.create_element!(db, "Cost"; label = "Cost 1")
+    PSRDatabase.create_element!(db, "Cost"; label = "Cost 2")
+    PSRDatabase.create_element!(db, "Cost"; label = "Cost 3")
+    PSRDatabase.create_element!(db, "Cost"; label = "Cost 4")
+    PSRDatabase.create_element!(db, "Plant"; label = "Plant 1", capacity = 49.0)
+    PSRDatabase.create_element!(db, "Plant"; label = "Plant 2", capacity = 50.0)
+    PSRDatabase.create_element!(db, "Plant"; label = "Plant 3", capacity = 51.0)
+    PSRDatabase.create_element!(
+        db,
+        "Plant";
+        label = "Plant 4",
+        capacity = 51.0,
+        some_factor = [0.1, 0.3],
+    )
+
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.set_scalar_relation!(
+        db,
+        "Plant",
+        "Cost",
+        "Plant 1",
+        ["Cost 1"],
+        "some_relation_type",
+    )
+    PSRDatabase.set_set_relation!(
+        db,
+        "Plant",
+        "Cost",
+        "Plant 1",
+        ["Cost 1"],
+        "some_relation_type",
+    )
+    PSRDatabase.set_set_relation!(
+        db,
+        "Plant",
+        "Cost",
+        "Plant 2",
+        ["Cost 1", "Cost 2", "Cost 3"],
+        "some_relation_type",
+    )
+    PSRDatabase.set_set_relation!(
+        db,
+        "Plant",
+        "Cost",
+        "Plant 4",
+        ["Cost 1", "Cost 3"],
+        "id",
+    )
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.set_set_relation!(
+        db,
+        "Plant",
+        "Cost",
+        "Plant 2",
+        ["Cost 10", "Cost 2"],
+        "some_relation_type",
+    )
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.set_set_relation!(
         db,
         "Plant",
         "Cost",
@@ -333,9 +406,62 @@ function test_update_vector_parameters()
     return rm(db_path)
 end
 
-function test_create_time_series_files()
-    path_schema = joinpath(@__DIR__, "test_create_time_series_files.sql")
-    db_path = joinpath(@__DIR__, "test_create_time_series_files.sqlite")
+function test_update_set_parameters()
+    path_schema = joinpath(@__DIR__, "test_update_set_parameters.sql")
+    db_path = joinpath(@__DIR__, "test_update_set_parameters.sqlite")
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
+    PSRDatabase.create_element!(
+        db,
+        "Resource";
+        label = "Resource 1",
+        type = "E",
+        some_value_1 = [1.0, 2.0, 3.0],
+    )
+    PSRDatabase.create_element!(db, "Resource"; label = "Resource 2", type = "E")
+
+    PSRDatabase.update_set_parameters!(
+        db,
+        "Resource",
+        "some_value_1",
+        "Resource 1",
+        [4.0, 5.0, 6.0],
+    )
+    PSRDatabase.update_set_parameters!(
+        db,
+        "Resource",
+        "some_value_2",
+        "Resource 1",
+        [4.0, 5.0, 6.0],
+    )
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.update_set_parameters!(
+        db,
+        "Resource",
+        "some_value_3",
+        "Resource 1",
+        [4.0, 5.0, 6.0],
+    )
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.update_set_parameters!(
+        db,
+        "Resource",
+        "some_value_1",
+        "Resource 1",
+        [1, 2, 3],
+    )
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.update_set_parameters!(
+        db,
+        "Resource",
+        "some_value_1",
+        "Resource 1",
+        [4.0, 5.0, 6.0, 7.0],
+    )
+    PSRDatabase.close!(db)
+    return rm(db_path)
+end
+
+function test_update_time_series_files()
+    path_schema = joinpath(@__DIR__, "test_update_time_series_files.sql")
+    db_path = joinpath(@__DIR__, "test_update_time_series_files.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
     PSRDatabase.create_element!(db, "Resource"; label = "Resource 1")
@@ -421,7 +547,7 @@ end
 
 function test_update_vector_with_empty_relations_id()
     path_schema = joinpath(dirname(@__DIR__), "test_create", "test_create_vectors_with_empty_relations.sql")
-    db_path = joinpath(@__DIR__, "test_update_vectors_with_empty_relations.sqlite")
+    db_path = joinpath(@__DIR__, "test_create_vectors_with_empty_relations.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
 
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case")
@@ -458,7 +584,7 @@ end
 
 function test_update_vector_with_empty_relations_string()
     path_schema = joinpath(dirname(@__DIR__), "test_create", "test_create_vectors_with_empty_relations.sql")
-    db_path = joinpath(@__DIR__, "test_update_vectors_with_empty_relations.sqlite")
+    db_path = joinpath(@__DIR__, "test_create_vectors_with_empty_relations.sqlite")
     db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
 
     PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case")
