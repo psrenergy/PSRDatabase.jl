@@ -105,7 +105,7 @@ CREATE TABLE ThermalPlant_vector_some_group(
 A vector relation with another collection should be stored in a table of vector groups and be defined the same way as a vector attribute. To tell that it is a relation with another collection, the name of the relational attribute should be the name of the target collection followed by the relation type defined as `_relation_type`, i.e. `gaugingstation_id` indicated that the collection HydroPlant has an `id` relation with the collection GaugingStation. If the name of the attribute was `gaugingstation_turbine_to`, it would indicate that the collection HydroPlant has a relation `turbine_to` with the collection GaugingStation.
 
 ```sql
-CREATE TABLE HydroPlant_vector_GaugingStation(
+CREATE TABLE HydroPlant_vector_gaugingstations(
     id INTEGER,
     vector_index INTEGER NOT NULL,
     conversion_factor REAL NOT NULL,
@@ -119,7 +119,7 @@ CREATE TABLE HydroPlant_vector_GaugingStation(
 
 A set is a collection of unique values associated with an element from a Collection. Sets are similar to vectors, but they do not have a specific order and have to be unique.
 
-- In case of a set attribute, a table should be created with its name indicating the name of the Collection and the name of the attribute, separated by `_set_`, such as `COLLECTION_set_ATTRIBUTE`.
+- In case of a set attribute, a table should be created with its name indicating the name of the Collection and the name of a group of the attribute, separated by `_set_`, such as `COLLECTION_set_GROUP_OF_ATTRIBUTES`.
 
 - The table must contain a Column named `id`.
 - The table must not have any primary keys.
@@ -127,7 +127,7 @@ A set is a collection of unique values associated with an element from a Collect
 
 Example:
 ```sql
-CREATE TABLE HydroPlant_set_GaugingStation(
+CREATE TABLE HydroPlant_set_gaugingstations(
     id INTEGER,
     conversion_factor REAL NOT NULL,
     gaugingstation_id INTEGER,
@@ -158,7 +158,7 @@ CREATE TABLE Resource_time_series_group1 (
 ### Time Series Files
 
 - All Time Series files for the elements from a Collection should be stored in a Table
-- The Table name should be the same as the name of the Collection followed by `_time_series_files`, such as `COLLECTION_vector_ATTRIBUTE`.
+- The Table name should be the same as the name of the Collection followed by `_time_series_files`, e. g. `COLLECTION_time_series_files`.
 
 - Each Column of the table should be named after the name of the attribute.
 - Each Column should store the path to the file containing the time series data.
