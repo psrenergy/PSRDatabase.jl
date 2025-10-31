@@ -1031,6 +1031,7 @@ function test_unordered_time_controller()
     GC.gc()
     GC.gc()
     rm(db_path)
+    return nothing
 end
 
 function runtests()
