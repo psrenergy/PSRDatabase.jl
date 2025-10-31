@@ -971,6 +971,68 @@ function test_add_time_series_row()
     return nothing
 end
 
+function test_unordered_time_controller()
+    path_schema = joinpath(@__DIR__, "test_unordered_time_controller.sql")
+    db_path = joinpath(@__DIR__, "test_unordered_time_controller.sqlite")
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+
+    PSRDatabase.create_element!(db, "MyTable"; label = "table1")
+
+    PSRDatabase.add_time_series_row!(
+        db,
+        "MyTable",
+        "my_parameter",
+        "table1",
+        0;
+        date_time = DateTime(0),
+    )
+
+    PSRDatabase.add_time_series_row!(
+        db,
+        "MyTable",
+        "my_parameter",
+        "table1",
+        2020;
+        date_time = DateTime(2020),
+    )
+
+    PSRDatabase.add_time_series_row!(
+        db,
+        "MyTable",
+        "my_parameter",
+        "table1",
+        1900;
+        date_time = DateTime(1900),
+    )
+
+    PSRDatabase.add_time_series_row!(
+        db,
+        "MyTable",
+        "my_parameter",
+        "table1",
+        2018;
+        date_time = DateTime(2018),
+    )
+
+    PSRDatabase.close!(db)
+
+    db = PSRDatabase.load_db(db_path; read_only = true)
+
+    value = PSRDatabase.read_time_series_row(
+        db,
+        "MyTable",
+        "my_parameter";
+        date_time = DateTime(2021),
+    )
+
+    @test value[1] == 2020
+
+    PSRDatabase.close!(db)
+    GC.gc()
+    GC.gc()
+    rm(db_path)
+end
+
 function runtests()
     Base.GC.gc()
     Base.GC.gc()

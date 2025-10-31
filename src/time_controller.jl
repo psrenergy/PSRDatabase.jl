@@ -94,7 +94,7 @@ function _start_time_controller_cache(
     )
     # Query the attribute and all of its dimension
     query = string("SELECT ", join(attribute.dimension_names, ",", ", "), ", ", "id", ", ", attribute.id)
-    query *= " FROM $(attribute.table_where_is_located)"
+    query *= " FROM $(attribute.table_where_is_located) ORDER BY date(date_time) ASC;"
     df = DBInterface.execute(db.sqlite_db, query) |> DataFrame
     for (i, id) in enumerate(_collection_ids)
         filtered_df = filter(row -> row.id == id, df)
