@@ -325,7 +325,7 @@ function test_update_scalar_parameters()
         db,
         "Resource",
         "Resource 1";
-        some_value_1 = 1.0
+        some_value_1 = 1.0,
     )
     PSRDatabase.update_scalar_parameter!(
         db,

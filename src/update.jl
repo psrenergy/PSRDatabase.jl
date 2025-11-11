@@ -36,7 +36,7 @@ function update_parameter!(
     db::DatabaseSQLite,
     collection_id::String,
     label::String;
-    kwargs...
+    kwargs...,
 )
     for attribute in keys(kwargs)
         attr = String(attribute)
