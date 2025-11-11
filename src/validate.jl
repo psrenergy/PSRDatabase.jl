@@ -230,6 +230,26 @@ function _get_correct_method_to_use(correct_composite_type::Type, action::Symbol
     end
 end
 
+function _throw_if_attribute_is_not_parameter(
+    db::DatabaseSQLite,
+    collection::String,
+    attribute::String,
+    action::Symbol,
+)
+    _throw_if_collection_or_attribute_do_not_exist(db, collection, attribute)
+
+    if !_is_parameter(db, collection, attribute)
+        correct_composity_type =
+            _attribute_composite_type(db, collection, attribute)
+        string_of_composite_types = _string_for_composite_types(correct_composity_type)
+        correct_method_to_use = _get_correct_method_to_use(correct_composity_type, action)
+        psr_database_sqlite_error(
+            "Attribute \"$attribute\" is not a parameter. It is a $string_of_composite_types. Use `$correct_method_to_use` instead.",
+        )
+    end
+    return nothing
+end
+
 function _throw_if_attribute_is_not_scalar_parameter(
     db::DatabaseSQLite,
     collection::String,
