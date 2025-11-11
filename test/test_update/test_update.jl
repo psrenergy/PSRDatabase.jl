@@ -321,6 +321,12 @@ function test_update_scalar_parameters()
         "Resource 1",
         1.0,
     )
+    PSRDatabase.update_parameter!(
+        db,
+        "Resource",
+        "Resource 1";
+        some_value_1 = 1.0
+    )
     PSRDatabase.update_scalar_parameter!(
         db,
         "Resource",
@@ -381,6 +387,12 @@ function test_update_vector_parameters()
         "Resource 1",
         [4.0, 5.0, 6.0],
     )
+    PSRDatabase.update_parameter!(
+        db,
+        "Resource",
+        "Resource 1";
+        some_value_1 = [7.0, 8.0, 9.0],
+    )
     @test_throws PSRDatabase.DatabaseException PSRDatabase.update_vector_parameters!(
         db,
         "Resource",
@@ -433,6 +445,12 @@ function test_update_set_parameters()
         "some_value_2",
         "Resource 1",
         [4.0, 5.0, 6.0],
+    )
+    PSRDatabase.update_parameter!(
+        db,
+        "Resource",
+        "Resource 1";
+        some_value_1 = [7.0, 8.0, 9.0],
     )
     @test_throws PSRDatabase.DatabaseException PSRDatabase.update_set_parameters!(
         db,

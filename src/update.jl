@@ -15,6 +15,55 @@ const UPDATE_METHODS_BY_CLASS_OF_ATTRIBUTE = Dict(
 )
 
 """
+    update_parameter!(db::DatabaseSQLite, collection_id::String, label::String; kwargs...)
+
+Update multiple parameter attributes for a specific element in a collection.
+The function can update multiple types of parameters
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_id::String`: The identifier of the collection containing the element
+  - `label::String`: The label of the element to update
+  - `kwargs...`: Named arguments where keys are attribute names and values are the new values for those attributes
+
+# Returns
+
+    - `nothing`
+
+"""
+function update_parameter!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    label::String;
+    kwargs...
+)
+    for attribute in keys(kwargs)
+        attr = String(attribute)
+        # Validate that the attribute is a parameter
+        _throw_if_attribute_is_not_parameter(
+            db,
+            collection_id,
+            attr,
+            :update,
+        )
+        value = kwargs[attribute]
+        if _is_vector_parameter(db, collection_id, attr)
+            update_vector_parameters!(db, collection_id, attr, label, value)
+        elseif _is_set_parameter(db, collection_id, attr)
+            update_set_parameters!(db, collection_id, attr, label, value)
+        elseif _is_scalar_parameter(db, collection_id, attr)
+            update_scalar_parameter!(db, collection_id, attr, label, value)
+        else
+            psr_database_sqlite_error(
+                "Attribute $attr in collection $collection_id is not a recognized parameter type.",
+            )
+        end
+    end
+    return nothing
+end
+
+"""
     update_scalar_parameter!(db::DatabaseSQLite, collection_id::String, attribute_id::String, label::String, val)
 
 Update the value of a scalar parameter attribute for a specific element in a collection.

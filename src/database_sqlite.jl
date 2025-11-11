@@ -151,6 +151,16 @@ function _is_set_parameter(
     return haskey(collection.set_parameters, attribute_id)
 end
 
+function _is_parameter(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+)
+    return _is_scalar_parameter(db, collection_id, attribute_id) ||
+           _is_vector_parameter(db, collection_id, attribute_id) ||
+           _is_set_parameter(db, collection_id, attribute_id)
+end
+
 function _is_scalar_relation(
     db::DatabaseSQLite,
     collection_id::String,
