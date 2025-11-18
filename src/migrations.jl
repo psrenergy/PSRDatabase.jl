@@ -102,7 +102,7 @@ function create_migration(path_migrations_directory::String, version::Int)
     return migration_folder
 end
 
-function _save_database_backup(db::SQLite.DB, current_version::Int)
+function _save_database_backup(db::SQLite.DB, current_version::Integer)
     if (current_version == 0)
         return
     end
@@ -124,8 +124,8 @@ end
 function _apply_migrations!(
     db::SQLite.DB,
     migrations::Vector{Migration},
-    from_version::Int,
-    to_version::Int,
+    from_version::Integer,
+    to_version::Integer,
     direction::Symbol,
 )
     if direction == :down && from_version < to_version
@@ -192,8 +192,8 @@ end
 function apply_migrations!(
     db::SQLite.DB,
     path_migrations_directory::String,
-    from::Int,
-    to::Int,
+    from::Integer,
+    to::Integer,
     direction::Symbol,
 )
     if from == to
