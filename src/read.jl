@@ -1328,12 +1328,15 @@ Check if a value represents a null/missing value in PSRDatabase.
 function _is_null_in_db(value::Float64)
     return isnan(value)
 end
-function _is_null_in_db(value::Int64)
+
+function _is_null_in_db(value::Integer)
     return value == typemin(Int64)
 end
+
 function _is_null_in_db(value::String)
     return isempty(value)
 end
+
 function _is_null_in_db(value::DateTime)
     return value == typemin(DateTime)
 end
