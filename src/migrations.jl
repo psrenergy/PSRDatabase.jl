@@ -58,12 +58,12 @@ function parse_version(migration::String)
 end
 
 """
-    create_migration(path_migrations_directory::String, version::Int)
+    create_migration(path_migrations_directory::String, version::Integer)
 
 Creates a new migration in the migrations folder with the current date, the correct version and the name
 given in this function
 """
-function create_migration(path_migrations_directory::String, version::Int)
+function create_migration(path_migrations_directory::String, version::Integer)
     existing_migrations = get_sorted_migrations(path_migrations_directory)
 
     migration_index =

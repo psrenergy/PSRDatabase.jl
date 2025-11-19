@@ -32,7 +32,7 @@ function _set_foreign_keys_on!(db::SQLite.DB)
     return nothing
 end
 
-function _set_busy_timeout!(db::SQLite.DB, timeout::Int)
+function _set_busy_timeout!(db::SQLite.DB, timeout::Integer)
     # https://www.sqlite.org/pragma.html#pragma_busy_timeout
     DBInterface.execute(db, "PRAGMA busy_timeout = $timeout;")
     return nothing

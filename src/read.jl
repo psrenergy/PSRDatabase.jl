@@ -1071,7 +1071,7 @@ function read_time_series_row(
 end
 
 """
-    _read_time_series_table(db::DatabaseSQLite, attribute::Attribute, id::Int)
+    _read_time_series_table(db::DatabaseSQLite, attribute::Attribute, id::Integer)
 
 Internal function to read the complete time series table for a specific element.
 
@@ -1079,7 +1079,7 @@ Internal function to read the complete time series table for a specific element.
 
   - `db::DatabaseSQLite`: The database connection
   - `attribute::Attribute`: The time series attribute
-  - `id::Int`: The numeric ID of the element
+  - `id::Integer`: The numeric ID of the element
 
 # Returns
 
@@ -1088,7 +1088,7 @@ Internal function to read the complete time series table for a specific element.
 function _read_time_series_table(
     db::DatabaseSQLite,
     attribute::Attribute,
-    id::Int,
+    id::Integer,
 )
     query = string("SELECT ", join(attribute.dimension_names, ",", ", "), ", ", attribute.id)
     query *= " FROM $(attribute.table_where_is_located) WHERE id = '$id'"

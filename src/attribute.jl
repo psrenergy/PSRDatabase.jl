@@ -109,7 +109,7 @@ mutable struct TimeSeries{T} <: VectorAttribute
     parent_collection::String
     table_where_is_located::String
     dimension_names::Vector{String}
-    num_dimensions::Int
+    num_dimensions::Integer
 end
 
 mutable struct SetParameter{T} <: SetAttribute
