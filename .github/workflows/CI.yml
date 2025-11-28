@@ -35,6 +35,7 @@ jobs:
           - ubuntu-latest
           - windows-latest
         arch:
+          - x86
           - x64
     steps:
       - uses: actions/checkout@v5
