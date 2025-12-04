@@ -21,6 +21,7 @@ include("update.jl")
 include("delete.jl")
 include("validate.jl")
 include("migrations.jl")
+include("script_from_db.jl")
 include("docstrings.jl")
 
 end # module
