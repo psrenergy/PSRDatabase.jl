@@ -284,7 +284,7 @@ function test_generate_code_from_simple_parameters()
     PSRDatabase.create_element!(db, "Resource"; label = "Resource 2", type = "F")
 
     # Generate code to file
-    PSRDatabase.generate_code_from_database(
+    PSRDatabase.julia_script_from_database(
         db,
         code_path,
         db_reconstructed_path;
@@ -345,7 +345,7 @@ function test_generate_code_from_parameters_and_vectors()
     )
 
     # Generate code to file
-    PSRDatabase.generate_code_from_database(
+    PSRDatabase.julia_script_from_database(
         db,
         code_path,
         db_reconstructed_path;
@@ -401,7 +401,7 @@ function test_generate_code_from_vectors_with_relations()
     )
 
     # Generate code to file
-    PSRDatabase.generate_code_from_database(
+    PSRDatabase.julia_script_from_database(
         db,
         code_path,
         db_reconstructed_path;
@@ -476,7 +476,7 @@ function test_generate_code_from_time_series()
     end
 
     # Generate code to file
-    PSRDatabase.generate_code_from_database(
+    PSRDatabase.julia_script_from_database(
         db,
         code_path,
         db_reconstructed_path;
@@ -526,7 +526,7 @@ function test_generate_code_from_date_parameters()
     )
 
     # Generate code to file
-    PSRDatabase.generate_code_from_database(
+    PSRDatabase.julia_script_from_database(
         db,
         code_path,
         db_reconstructed_path;
