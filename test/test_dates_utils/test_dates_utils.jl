@@ -62,7 +62,7 @@ function test_month()
             for day in 1:DAYS_IN_MONTH[month]
                 @test DatesUtils.epoch_to_month(DatesUtils.date_to_epoch(day, month, year)) == month
 
-                epoch = year_epoch + sum(DAYS_IN_MONTH[1:(month-1)]) * DatesUtils.EPOCH_DAY
+                epoch = year_epoch + sum(DAYS_IN_MONTH[1:(month - 1)]) * DatesUtils.EPOCH_DAY
                 if DatesUtils.is_leap_year(year) && year_day > 59
                     epoch += DatesUtils.EPOCH_DAY
                 end
@@ -180,7 +180,6 @@ function test_cross()
 
     return nothing
 end
-
 
 function runtests()
     for name in names(@__MODULE__; all = true)
