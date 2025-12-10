@@ -156,9 +156,9 @@ function _apply_migrations!(
     end
 
     range_of_migrations = if direction == :up
-        from_version+1:to_version
+        (from_version + 1):to_version
     else
-        from_version:-1:to_version+1
+        from_version:-1:(to_version + 1)
     end
 
     _save_database_backup(db, from_version)
