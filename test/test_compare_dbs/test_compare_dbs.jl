@@ -913,7 +913,7 @@ function test_compare_set_parameters_different_sets()
 
     differences = PSRDatabase.compare_set_parameters(db1, db2, "Resource")
     @test !isempty(differences)
-    @test any(occursin("group", diff) for diff in differences)
+    @test any(occursin("some_set_value2", diff) for diff in differences)
     @test any(occursin("sets differ", diff) for diff in differences)
 
     PSRDatabase.close!(db1)
