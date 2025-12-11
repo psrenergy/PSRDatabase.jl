@@ -1,6 +1,6 @@
 name = "PSRDatabase"
 uuid = "d9b62651-08e5-4754-bb8c-8acb2abbd08d"
-version = "0.4.0"
+version = "0.5.0"
 
 [deps]
 DBInterface = "a10d1c49-ce27-4219-8d33-6db1a4562965"
