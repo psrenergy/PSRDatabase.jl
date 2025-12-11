@@ -288,6 +288,107 @@ function test_generate_code_from_date_parameters()
     return nothing
 end
 
+function test_generate_code_throws_invalid_output_jl_path_directory()
+    path_schema = joinpath(@__DIR__, "..", "test_create", "test_create_parameters.sql")
+    db_path = joinpath(@__DIR__, "test_generate_code_throws.sqlite")
+    invalid_code_path = joinpath(@__DIR__, "nonexistent_directory", "code.jl")
+    db_reconstructed_path = joinpath(@__DIR__, "test_generate_code_throws_reconstructed.sqlite")
+
+    # Create minimal database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; label = "Test", value1 = 1.0)
+
+    # Test that invalid output_jl_path directory throws
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.generate_julia_script_from_database(
+        db,
+        invalid_code_path,
+        db_reconstructed_path;
+        path_schema = path_schema,
+    )
+
+    # Cleanup
+    PSRDatabase.close!(db)
+    rm(db_path)
+
+    return nothing
+end
+
+function test_generate_code_throws_invalid_output_db_path_directory()
+    path_schema = joinpath(@__DIR__, "..", "test_create", "test_create_parameters.sql")
+    db_path = joinpath(@__DIR__, "test_generate_code_throws.sqlite")
+    code_path = joinpath(@__DIR__, "test_generate_code_throws.jl")
+    invalid_db_reconstructed_path = joinpath(@__DIR__, "nonexistent_directory", "db.sqlite")
+
+    # Create minimal database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; label = "Test", value1 = 1.0)
+
+    # Test that invalid output_db_path directory throws
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.generate_julia_script_from_database(
+        db,
+        code_path,
+        invalid_db_reconstructed_path;
+        path_schema = path_schema,
+    )
+
+    # Cleanup
+    PSRDatabase.close!(db)
+    rm(db_path)
+
+    return nothing
+end
+
+function test_generate_code_throws_missing_path_schema_and_path_migrations()
+    path_schema = joinpath(@__DIR__, "..", "test_create", "test_create_parameters.sql")
+    db_path = joinpath(@__DIR__, "test_generate_code_throws.sqlite")
+    code_path = joinpath(@__DIR__, "test_generate_code_throws.jl")
+    db_reconstructed_path = joinpath(@__DIR__, "test_generate_code_throws_reconstructed.sqlite")
+
+    # Create minimal database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; label = "Test", value1 = 1.0)
+
+    # Test that missing both path_schema and path_migrations throws
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.generate_julia_script_from_database(
+        db,
+        code_path,
+        db_reconstructed_path,
+    )
+
+    # Cleanup
+    PSRDatabase.close!(db)
+    rm(db_path)
+
+    return nothing
+end
+
+function test_generate_code_throws_both_path_schema_and_path_migrations()
+    path_schema = joinpath(@__DIR__, "..", "test_create", "test_create_parameters.sql")
+    path_migrations = joinpath(@__DIR__, "..", "migrations_tests", "test_1", "migrations")
+    db_path = joinpath(@__DIR__, "test_generate_code_throws.sqlite")
+    code_path = joinpath(@__DIR__, "test_generate_code_throws.jl")
+    db_reconstructed_path = joinpath(@__DIR__, "test_generate_code_throws_reconstructed.sqlite")
+
+    # Create minimal database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; label = "Test", value1 = 1.0)
+
+    # Test that specifying both path_schema and path_migrations throws
+    @test_throws PSRDatabase.DatabaseException PSRDatabase.generate_julia_script_from_database(
+        db,
+        code_path,
+        db_reconstructed_path;
+        path_schema = path_schema,
+        path_migrations = path_migrations,
+    )
+
+    # Cleanup
+    PSRDatabase.close!(db)
+    rm(db_path)
+
+    return nothing
+end
+
 function runtests()
     Base.GC.gc()
     Base.GC.gc()
