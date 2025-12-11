@@ -307,6 +307,44 @@ function test_compare_vector_parameters_null_mismatch()
     return nothing
 end
 
+function test_compare_vector_parameters_empty_vector()
+    db1 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db1.sqlite"),
+        PATH_SCHEMA;
+        force = true,
+    )
+    db2 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db2.sqlite"),
+        PATH_SCHEMA;
+        force = true,
+    )
+
+    # Create different number of elements with null vs non-null vector values
+    PSRDatabase.create_element!(
+        db1,
+        "Resource";
+        label = "Resource1",
+        type = "D",
+    )
+    PSRDatabase.create_element!(
+        db2,
+        "Resource";
+        label = "Resource1",
+        type = "D",
+        some_value1 = [1.0, 2.0],
+    )
+
+    differences = PSRDatabase.compare_vector_parameters(db1, db2, "Resource")
+    @test !isempty(differences)
+    @test any(occursin("different vector lengths", diff) for diff in differences)
+
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(joinpath(@__DIR__, "test_db1.sqlite"); force = true)
+    rm(joinpath(@__DIR__, "test_db2.sqlite"); force = true)
+    return nothing
+end
+
 function test_compare_scalar_relations_different_relations()
     db1 = PSRDatabase.create_empty_db_from_schema(
         joinpath(@__DIR__, "test_db1.sqlite"),
@@ -1034,6 +1072,45 @@ function test_compare_set_parameters_null_mismatch()
     differences = PSRDatabase.compare_set_parameters(db1, db2, "Resource")
     @test !isempty(differences)
     @test any(occursin("null mismatch", diff) for diff in differences)
+
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(joinpath(@__DIR__, "test_db1.sqlite"); force = true)
+    rm(joinpath(@__DIR__, "test_db2.sqlite"); force = true)
+    return nothing
+end
+
+function test_compare_set_parameters_empty_set()
+        db1 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db1.sqlite"),
+        PATH_SCHEMA;
+        force = true,
+    )
+    db2 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db2.sqlite"),
+        PATH_SCHEMA;
+        force = true,
+    )
+
+    # Create elements with different set parameter values
+    PSRDatabase.create_element!(
+        db1,
+        "Resource";
+        label = "Resource1",
+        type = "D",
+    )
+    PSRDatabase.create_element!(
+        db2,
+        "Resource";
+        label = "Resource1",
+        type = "D",
+        some_set_value1 = [1.0, 2.0],
+        some_set_value2 = [5.0, 6.0],
+    )
+
+    differences = PSRDatabase.compare_set_parameters(db1, db2, "Resource")
+    @test !isempty(differences)
+    @test any(occursin("different set lengths", diff) for diff in differences)
 
     PSRDatabase.close!(db1)
     PSRDatabase.close!(db2)

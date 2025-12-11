@@ -612,28 +612,6 @@ function compare_set_parameters(
         sets1 = read_set_parameters(db1, collection_id, attr_id)
         sets2 = read_set_parameters(db2, collection_id, attr_id)
 
-        if isempty(sets1) && isempty(sets2)
-            continue
-        elseif isempty(sets1) && !isempty(sets2)
-            push!(
-                differences,
-                "Collection '$collection_id', set attribute '$(attr_id)': sets missing in db1 but present in db2",
-            )
-            continue
-        elseif !isempty(sets1) && isempty(sets2)
-            push!(
-                differences,
-                "Collection '$collection_id', set attribute '$(attr_id)': sets present in db1 but missing in db2",
-            )
-            continue
-        elseif length(sets1) != length(sets2)
-            push!(
-                differences,
-                "Collection '$collection_id', set attribute '$(attr_id)': different number of elements (db1: $(length(sets1)), db2: $(length(sets2)))",
-            )
-            continue
-        end
-
         for (elem_idx, (set1, set2)) in enumerate(zip(sets1, sets2))
             if length(set1) != length(set2)
                 push!(
@@ -729,28 +707,6 @@ function compare_set_relations(
             attr.relation_collection,
             attr.relation_type,
         )
-
-        if isempty(relations1) && isempty(relations2)
-            continue
-        elseif isempty(relations1) && !isempty(relations2)
-            push!(
-                differences,
-                "Collection '$collection_id', set relation '$attr_id' to '$(attr.relation_collection)': relations missing in db1 but present in db2",
-            )
-            continue
-        elseif !isempty(relations1) && isempty(relations2)
-            push!(
-                differences,
-                "Collection '$collection_id', set relation '$attr_id' to '$(attr.relation_collection)': relations present in db1 but missing in db2",
-            )
-            continue
-        elseif length(relations1) != length(relations2)
-            push!(
-                differences,
-                "Collection '$collection_id', set relation '$attr_id' to '$(attr.relation_collection)': different number of elements (db1: $(length(relations1)), db2: $(length(relations2)))",
-            )
-            continue
-        end
 
         for (elem_idx, (rel_set1, rel_set2)) in enumerate(zip(relations1, relations2))
             if length(rel_set1) != length(rel_set2)
