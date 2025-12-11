@@ -1081,7 +1081,7 @@ function test_compare_set_parameters_null_mismatch()
 end
 
 function test_compare_set_parameters_empty_set()
-        db1 = PSRDatabase.create_empty_db_from_schema(
+    db1 = PSRDatabase.create_empty_db_from_schema(
         joinpath(@__DIR__, "test_db1.sqlite"),
         PATH_SCHEMA;
         force = true,
