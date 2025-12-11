@@ -38,7 +38,7 @@ function _insert_vectors_from_df(
                 query *= "\'$value\', "
             end
             if i == num_cols
-                query = query[1:end-2]
+                query = query[1:(end - 2)]
                 query *= ")"
             end
         end
