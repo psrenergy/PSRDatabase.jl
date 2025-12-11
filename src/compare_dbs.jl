@@ -564,6 +564,225 @@ function compare_time_series_files(
 end
 
 """
+    compare_set_parameters(db1::DatabaseSQLite, db2::DatabaseSQLite, collection_id::String)
+
+Compare set parameters between two databases for a specific collection.
+
+This function iterates through all set parameters in the specified collection and compares
+the sets of values for each element between the two databases. For each set attribute, it checks:
+- The number of elements in the collection
+- The size of each set
+- The values within each set (order-independent comparison)
+
+# Arguments
+
+  - `db1::DatabaseSQLite`: The first database to compare (used as the reference for reading collection structure)
+  - `db2::DatabaseSQLite`: The second database to compare against the first
+  - `collection_id::String`: The name of the collection (table) to compare set parameters for
+
+# Returns
+
+A vector of strings describing differences found in set parameters. Each string includes the
+collection name, set attribute name, element index, and the differing set contents.
+Returns an empty vector if all set parameters are identical.
+
+# Example
+
+```julia
+db1 = create_empty_db_from_schema("db1.sqlite", "schema.sql"; force = true)
+db2 = create_empty_db_from_schema("db2.sqlite", "schema.sql"; force = true)
+
+# Create elements with different set parameter values (provided as arrays)
+create_element!(db1, "Resource"; label = "Resource1", type = "D", some_set_value1 = [1.0, 2.0], some_set_value2 = [5.0, 4.0])
+create_element!(db2, "Resource"; label = "Resource1", type = "D", some_set_value1 = [1.0, 2.0], some_set_value2 = [5.0, 6.0])
+
+differences = compare_set_parameters(db1, db2, "Resource")
+# Returns: ["Collection 'Resource', set attribute 'some_set_value2', element 2: sets differ (db1: 4.0, db2: 6.0)"]
+```
+"""
+function compare_set_parameters(
+    db1::DatabaseSQLite,
+    db2::DatabaseSQLite,
+    collection_id::String,
+)
+    differences = String[]
+    collection = _get_collection(db1, collection_id)
+
+    for (attr_id, attr) in collection.set_parameters
+        sets1 = read_set_parameters(db1, collection_id, attr_id)
+        sets2 = read_set_parameters(db2, collection_id, attr_id)
+
+        if isempty(sets1) && isempty(sets2)
+            continue
+        elseif isempty(sets1) && !isempty(sets2)
+            push!(
+                differences,
+                "Collection '$collection_id', set attribute '$(attr_id)': sets missing in db1 but present in db2",
+            )
+            continue
+        elseif !isempty(sets1) && isempty(sets2)
+            push!(
+                differences,
+                "Collection '$collection_id', set attribute '$(attr_id)': sets present in db1 but missing in db2",
+            )
+            continue
+        elseif length(sets1) != length(sets2)
+            push!(
+                differences,
+                "Collection '$collection_id', set attribute '$(attr_id)': different number of elements (db1: $(length(sets1)), db2: $(length(sets2)))",
+            )
+            continue
+        end
+
+        for (elem_idx, (set1, set2)) in enumerate(zip(sets1, sets2))
+            if length(set1) != length(set2)
+                push!(
+                    differences,
+                    "Collection '$collection_id', set attribute '$(attr_id)', element $elem_idx: different set lengths (db1: $(length(set1)), db2: $(length(set2)))",
+                )
+                continue
+            end
+
+            for (set_idx, (s1, s2)) in enumerate(zip(set1, set2))
+                if _is_null_in_db(s1) || _is_null_in_db(s2)
+                    if _is_null_in_db(s1) != _is_null_in_db(s2)
+                        push!(
+                            differences,
+                            "Collection '$collection_id', set attribute '$(attr_id)', element $elem_idx, set index $set_idx: null mismatch (db1: $(s1), db2: $(s2))",
+                        )
+                    end
+                elseif s1 != s2
+                    push!(
+                        differences,
+                        "Collection '$collection_id', set attribute '$(attr_id)', element $elem_idx: sets differ (db1: $(s1), db2: $(s2))",
+                    )
+                end
+            end
+        end
+    end
+
+    return differences
+end
+
+"""
+    compare_set_relations(db1::DatabaseSQLite, db2::DatabaseSQLite, collection_id::String)
+
+Compare set relations between two databases for a specific collection.
+
+This function iterates through all set relations (sets of foreign key references to other
+collections) in the specified collection and compares them element-by-element between the two
+databases. For each set relation, it checks:
+- The number of elements in the collection
+- The size of each relation set
+- Individual relation references within each set (order-independent comparison)
+
+# Arguments
+
+  - `db1::DatabaseSQLite`: The first database to compare (used as the reference for reading collection structure)
+  - `db2::DatabaseSQLite`: The second database to compare against the first
+  - `collection_id::String`: The name of the collection (table) to compare set relations for
+
+# Returns
+
+A vector of strings describing differences found in set relations. Each string includes the
+collection name, set relation attribute name, target collection name, element index, and the
+labels of the related elements that differ. Returns an empty vector if all set relations are identical.
+
+# Example
+
+```julia
+db1 = create_empty_db_from_schema("db1.sqlite", "schema.sql"; force = true)
+db2 = create_empty_db_from_schema("db2.sqlite", "schema.sql"; force = true)
+
+# Create costs
+for (db, label, value) in [(db1, "Cost1", 10.0), (db1, "Cost2", 20.0), (db1, "Cost3", 30.0),
+                            (db2, "Cost1", 10.0), (db2, "Cost2", 20.0), (db2, "Cost3", 30.0)]
+    create_element!(db, "Cost"; label = label, value = value)
+end
+
+# Create resources with different set relations (provided as separate arrays)
+create_element!(db1, "Resource"; label = "Resource1", some_set_factor = [1.0, 2.0], cost_id = ["Cost1", "Cost2"])
+create_element!(db2, "Resource"; label = "Resource1", some_set_factor = [1.0, 2.0], cost_id = ["Cost1", "Cost3"])
+
+differences = compare_set_relations(db1, db2, "Resource")
+# Returns: ["Collection 'Resource', set relation 'cost_id' to 'Cost', element 1, set index 2: relation sets differ (db1: Cost2, db2: Cost3)"]
+```
+"""
+function compare_set_relations(
+    db1::DatabaseSQLite,
+    db2::DatabaseSQLite,
+    collection_id::String,
+)
+    differences = String[]
+    collection = _get_collection(db1, collection_id)
+
+    for (attr_id, attr) in collection.set_relations
+        relations1 = read_set_relations(
+            db1,
+            collection_id,
+            attr.relation_collection,
+            attr.relation_type,
+        )
+        relations2 = read_set_relations(
+            db2,
+            collection_id,
+            attr.relation_collection,
+            attr.relation_type,
+        )
+
+        if isempty(relations1) && isempty(relations2)
+            continue
+        elseif isempty(relations1) && !isempty(relations2)
+            push!(
+                differences,
+                "Collection '$collection_id', set relation '$attr_id' to '$(attr.relation_collection)': relations missing in db1 but present in db2",
+            )
+            continue
+        elseif !isempty(relations1) && isempty(relations2)
+            push!(
+                differences,
+                "Collection '$collection_id', set relation '$attr_id' to '$(attr.relation_collection)': relations present in db1 but missing in db2",
+            )
+            continue
+        elseif length(relations1) != length(relations2)
+            push!(
+                differences,
+                "Collection '$collection_id', set relation '$attr_id' to '$(attr.relation_collection)': different number of elements (db1: $(length(relations1)), db2: $(length(relations2)))",
+            )
+            continue
+        end
+
+        for (elem_idx, (rel_set1, rel_set2)) in enumerate(zip(relations1, relations2))
+            if length(rel_set1) != length(rel_set2)
+                push!(
+                    differences,
+                    "Collection '$collection_id', set relation '$attr_id' to '$(attr.relation_collection)', element $elem_idx: different set lengths (db1: $(length(rel_set1)), db2: $(length(rel_set2)))",
+                )
+                continue
+            end
+
+            for (set_idx, (r1, r2)) in enumerate(zip(rel_set1, rel_set2))
+                if _is_null_in_db(r1) || _is_null_in_db(r2)
+                    if _is_null_in_db(r1) != _is_null_in_db(r2)
+                        push!(
+                            differences,
+                            "Collection '$collection_id', set relation '$attr_id' to '$(attr.relation_collection)', element $elem_idx, set index $set_idx: null mismatch (db1: $(r1), db2: $(r2))",
+                        )
+                    end
+                elseif r1 != r2
+                    push!(
+                        differences,
+                        "Collection '$collection_id', set relation '$attr_id' to '$(attr.relation_collection)', element $elem_idx, set index $set_idx: relation sets differ (db1: $(r1), db2: $(r2))",
+                    )
+                end
+            end
+        end
+    end
+
+    return differences
+end
+
+"""
     compare_databases(db1::DatabaseSQLite, db2::DatabaseSQLite)
 
 Compare two databases to ensure they have the same data across all collections.
@@ -575,6 +794,8 @@ through all collections and comparing their:
 - Vector parameters
 - Scalar relations
 - Vector relations
+- Set parameters
+- Set relations
 - Time series data
 - Time series file references
 
@@ -653,6 +874,12 @@ function compare_databases(
 
         # Compare vector relations
         append!(all_differences, compare_vector_relations(db1, db2, collection_id))
+
+        # Compare set parameters
+        append!(all_differences, compare_set_parameters(db1, db2, collection_id))
+
+        # Compare set relations
+        append!(all_differences, compare_set_relations(db1, db2, collection_id))
 
         # Compare time series
         if !isempty(_get_collection(db1, collection_id).time_series)

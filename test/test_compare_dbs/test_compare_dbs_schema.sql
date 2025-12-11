@@ -114,3 +114,20 @@ CREATE TABLE Plant_time_series_files (
     generation TEXT,
     prices TEXT
 ) STRICT;
+
+CREATE TABLE Resource_set_group (
+    id INTEGER,
+    some_set_value1 REAL,
+    some_set_value2 REAL,
+    FOREIGN KEY(id) REFERENCES Resource(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    UNIQUE (id, some_set_value1, some_set_value2)
+) STRICT;
+
+CREATE TABLE Resource_set_relation (
+    id INTEGER,
+    some_set_factor REAL,
+    cost_id INTEGER,
+    FOREIGN KEY(id) REFERENCES Resource(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY(cost_id) REFERENCES Cost(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    UNIQUE (id, some_set_factor, cost_id)
+) STRICT;
