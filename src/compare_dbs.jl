@@ -19,6 +19,19 @@ and actual value mismatches.
 A vector of strings describing differences found in scalar parameters. Each string includes the
 collection name, attribute name, element index, and the differing values. Returns an empty vector
 if all scalar parameters are identical.
+
+# Example
+
+```julia
+db1 = create_empty_db_from_schema("db1.sqlite", "schema.sql"; force = true)
+db2 = create_empty_db_from_schema("db2.sqlite", "schema.sql"; force = true)
+
+create_element!(db1, "Configuration"; label = "Config1", value1 = 100.0)
+create_element!(db2, "Configuration"; label = "Config1", value1 = 200.0)
+
+differences = compare_scalar_parameters(db1, db2, "Configuration")
+# Returns: ["Collection 'Configuration', attribute 'value1', element 1: values differ (db1: 100.0, db2: 200.0)"]
+```
 """
 function compare_scalar_parameters(
     db1::DatabaseSQLite,
@@ -88,6 +101,19 @@ their values element-by-element between the two databases. For each vector attri
 A vector of strings describing differences found in vector parameters. Each string includes the
 collection name, vector attribute name, element index, vector index, and the differing values.
 Returns an empty vector if all vector parameters are identical.
+
+# Example
+
+```julia
+db1 = create_empty_db_from_schema("db1.sqlite", "schema.sql"; force = true)
+db2 = create_empty_db_from_schema("db2.sqlite", "schema.sql"; force = true)
+
+create_element!(db1, "Resource"; label = "Resource1", type = "D", some_value1 = [1.0, 2.0, 3.0])
+create_element!(db2, "Resource"; label = "Resource1", type = "D", some_value1 = [1.0, 5.0, 3.0])
+
+differences = compare_vector_parameters(db1, db2, "Resource")
+# Returns: ["Collection 'Resource', vector attribute 'some_value1', element 1, index 2: values differ (db1: 2.0, db2: 5.0)"]
+```
 """
 function compare_vector_parameters(
     db1::DatabaseSQLite,
@@ -161,6 +187,28 @@ verifies that each element points to the same related element in both databases.
 A vector of strings describing differences found in scalar relations. Each string includes the
 collection name, relation attribute name, target collection name, element index, and the labels
 of the related elements that differ. Returns an empty vector if all scalar relations are identical.
+
+# Example
+
+```julia
+db1 = create_empty_db_from_schema("db1.sqlite", "schema.sql"; force = true)
+db2 = create_empty_db_from_schema("db2.sqlite", "schema.sql"; force = true)
+
+# Create resources
+create_element!(db1, "Resource"; label = "Resource1", type = "D")
+create_element!(db1, "Resource"; label = "Resource2", type = "E")
+create_element!(db2, "Resource"; label = "Resource1", type = "D")
+create_element!(db2, "Resource"; label = "Resource2", type = "E")
+
+# Create plants with different scalar relations
+create_element!(db1, "Plant"; label = "Plant1", capacity = 100.0)
+create_element!(db2, "Plant"; label = "Plant1", capacity = 100.0)
+set_scalar_relation!(db1, "Plant", "Resource", "Plant1", "Resource1", "id")
+set_scalar_relation!(db2, "Plant", "Resource", "Plant1", "Resource2", "id")
+
+differences = compare_scalar_relations(db1, db2, "Plant")
+# Returns: ["Collection 'Plant', scalar relation 'resource_id' to 'Resource', element 1: relations differ (db1: Resource1, db2: Resource2)"]
+```
 """
 function compare_scalar_relations(
     db1::DatabaseSQLite,
@@ -229,6 +277,28 @@ A vector of strings describing differences found in vector relations. Each strin
 collection name, vector relation attribute name, target collection name, element index, vector
 index, and the labels of the related elements that differ. Returns an empty vector if all vector
 relations are identical.
+
+# Example
+
+```julia
+db1 = create_empty_db_from_schema("db1.sqlite", "schema.sql"; force = true)
+db2 = create_empty_db_from_schema("db2.sqlite", "schema.sql"; force = true)
+
+# Create costs
+for (db, label, value) in [(db1, "Cost1", 10.0), (db1, "Cost2", 20.0), (db1, "Cost3", 30.0),
+                            (db2, "Cost1", 10.0), (db2, "Cost2", 20.0), (db2, "Cost3", 30.0)]
+    create_element!(db, "Cost"; label = label, value = value)
+end
+
+# Create plants with different vector relations
+create_element!(db1, "Plant"; label = "Plant1", capacity = 100.0, some_factor = [1.0, 2.0])
+create_element!(db2, "Plant"; label = "Plant1", capacity = 100.0, some_factor = [1.0, 2.0])
+set_vector_relation!(db1, "Plant", "Cost", "Plant1", ["Cost1", "Cost2"], "id")
+set_vector_relation!(db2, "Plant", "Cost", "Plant1", ["Cost1", "Cost3"], "id")
+
+differences = compare_vector_relations(db1, db2, "Plant")
+# Returns: ["Collection 'Plant', vector relation 'cost_id' to 'Cost', element 1, index 2: relations differ (db1: Cost2, db2: Cost3)"]
+```
 """
 function compare_vector_relations(
     db1::DatabaseSQLite,
@@ -309,6 +379,32 @@ ensuring that null states match between databases.
 A vector of strings describing differences found in time series data. Each string includes the
 collection name, time series attribute name, element label, column name, row index, and the
 differing values. Returns an empty vector if all time series data is identical.
+
+# Example
+
+```julia
+using DataFrames, Dates
+
+db1 = create_empty_db_from_schema("db1.sqlite", "schema.sql"; force = true)
+db2 = create_empty_db_from_schema("db2.sqlite", "schema.sql"; force = true)
+
+df1 = DataFrame(
+    date_time = [DateTime(2020), DateTime(2021), DateTime(2022)],
+    some_vector1 = [1.0, 2.0, 3.0],
+    some_vector2 = [10.0, 20.0, 30.0],
+)
+df2 = DataFrame(
+    date_time = [DateTime(2020), DateTime(2021), DateTime(2022)],
+    some_vector1 = [1.0, 5.0, 3.0],
+    some_vector2 = [10.0, 20.0, 30.0],
+)
+
+create_element!(db1, "Resource"; label = "Resource1", type = "D", group1 = df1)
+create_element!(db2, "Resource"; label = "Resource1", type = "D", group1 = df2)
+
+differences = compare_time_series(db1, db2, "Resource")
+# Returns: ["Collection 'Resource', time series 'some_vector1', label 'Resource1', column 'some_vector1', row 2: values differ (db1: 2.0, db2: 5.0)"]
+```
 """
 function compare_time_series(
     db1::DatabaseSQLite,
@@ -410,6 +506,22 @@ A vector of strings describing differences found in time series file paths. Each
 the collection name, time series file attribute name, and information about whether
 file paths are missing or differ between databases. Returns an empty vector if all time series file
 references are identical.
+
+# Example
+
+```julia
+db1 = create_empty_db_from_schema("db1.sqlite", "schema.sql"; force = true)
+db2 = create_empty_db_from_schema("db2.sqlite", "schema.sql"; force = true)
+
+create_element!(db1, "Plant"; label = "Plant1", capacity = 100.0)
+create_element!(db2, "Plant"; label = "Plant1", capacity = 100.0)
+
+set_time_series_file!(db1, "Plant"; generation = "generation1.csv")
+set_time_series_file!(db2, "Plant"; generation = "generation2.csv")
+
+differences = compare_time_series_files(db1, db2, "Plant")
+# Returns: ["Collection 'Plant', time series file 'generation': file paths differ (db1: generation1.csv, db2: generation2.csv)"]
+```
 """
 function compare_time_series_files(
     db1::DatabaseSQLite,
@@ -486,22 +598,28 @@ message that identifies:
 
 If the databases are completely identical, returns an empty vector.
 
-# Example
+# Examples
 
 ```julia
-db1 = load_db("database1.sqlite")
-db2 = load_db("database2.sqlite")
+# Compare two identical databases
+db1 = create_empty_db_from_schema("db1.sqlite", "schema.sql"; force = true)
+db2 = create_empty_db_from_schema("db2.sqlite", "schema.sql"; force = true)
+
+create_element!(db1, "Configuration"; label = "Config1", value1 = 100.0)
+create_element!(db2, "Configuration"; label = "Config1", value1 = 100.0)
 
 differences = compare_databases(db1, db2)
+# Returns: []
 
-if isempty(differences)
-    println("Databases are identical")
-else
-    println("Found \$(length(differences)) differences:")
-    for diff in differences
-        println("  - \$diff")
-    end
-end
+# Compare databases with differences
+db3 = create_empty_db_from_schema("db3.sqlite", "schema.sql"; force = true)
+db4 = create_empty_db_from_schema("db4.sqlite", "schema.sql"; force = true)
+
+create_element!(db3, "Configuration"; label = "Config1", value1 = 100.0)
+create_element!(db4, "Configuration"; label = "Config1", value1 = 200.0)
+
+differences = compare_databases(db3, db4)
+# Returns: ["Collection 'Configuration', attribute 'value1', element 1: values differ (db1: 100.0, db2: 200.0)"]
 ```
 """
 function compare_databases(
