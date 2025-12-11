@@ -69,3 +69,10 @@ Pages = ["validate.jl"]
 Modules = [PSRDatabase]
 Pages = ["docstrings.jl"]
 ```
+
+## Comparing Databases
+
+```@autodocs
+Modules = [PSRDatabase]
+Pages = ["compare_dbs.jl"]
+```

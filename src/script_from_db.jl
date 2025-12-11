@@ -1,9 +1,4 @@
 """
-Functions to read an existing SQLite database and generate PSRDatabase.jl code
-that would recreate it using create_element!, update functions, and time series operations.
-"""
-
-"""
     generate_julia_script_from_database(db::DatabaseSQLite, output_jl_path::String, output_db_path::String; path_schema::String = "", path_migrations::String = "")
 
 Generate Julia code that recreates a database using PSRDatabase.jl functions.
