@@ -1140,6 +1140,132 @@ function read_time_series_table(
 end
 
 """
+    read_time_series_relation_table(db::DatabaseSQLite, collection_id::String, attribute_id::String, label::String)
+
+Read the complete time series relation table for a specific element identified by label.
+Returns labels instead of IDs for the relation values.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_id::String`: The identifier of the collection
+  - `attribute_id::String`: The identifier of the time series relation attribute
+  - `label::String`: The label of the element to read data for
+
+# Returns
+
+  - `DataFrame`: A DataFrame containing all time series relation data with labels
+
+# Example
+
+```julia
+relation_table = PSRDatabase.read_time_series_relation_table(db, "Resource", "plant_id", "Resource1")
+```
+"""
+function read_time_series_relation_table(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+    label::String,
+)
+    _throw_if_attribute_is_not_time_series_relation(
+        db,
+        collection_id,
+        attribute_id,
+        :read,
+    )
+    attribute = _get_attribute(db, collection_id, attribute_id)
+    id = _get_id(db, collection_id, label)
+
+    # Query the time series table
+    df = _read_time_series_table(db, attribute, id)
+
+    # Convert IDs to labels
+    relation_labels = read_scalar_parameters(db, attribute.relation_collection, "label")
+    num_elements = number_of_elements(db, attribute.relation_collection)
+    id_to_label = Dict{Int, String}(i => label for (i, label) in enumerate(relation_labels))
+    id_to_label[_PSRDatabase_null_value(Int)] = ""
+
+    # Replace IDs with labels in the DataFrame
+    df[!, attribute.id] = [get(id_to_label, id_val, "") for id_val in df[!, attribute.id]]
+
+    return df
+end
+
+"""
+    read_time_series_relation_row(db::DatabaseSQLite, collection_id::String, attribute_id::String, ::Type{String}; date_time::DateTime, additional_dimensions...)
+
+Read a single row of time series relation data with caching (read-only mode).
+Returns labels instead of IDs for the relation values.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection (must be in read-only mode)
+  - `collection_id::String`: The identifier of the collection
+  - `attribute_id::String`: The identifier of the time series relation attribute
+  - `::Type{String}`: Type parameter (always String for relations)
+  - `date_time::DateTime`: The date/time for which to read data
+  - `additional_dimensions...`: Additional dimensions (e.g., block=1, scenario=2)
+
+# Returns
+
+  - `Vector{String}`: A vector of labels for all elements at the specified date/time
+
+# Example
+
+```julia
+db = PSRDatabase.load_db("database.sqlite"; read_only=true)
+labels = PSRDatabase.read_time_series_relation_row(
+    db, "Resource", "plant_id", String;
+    date_time=DateTime(2020, 1, 1)
+)
+```
+"""
+function read_time_series_relation_row(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+    ::Type{String};
+    date_time::DateTime,
+    additional_dimensions...,
+)
+    @assert _is_read_only(db) "Time series mapping only works in read only databases"
+
+    _throw_if_attribute_is_not_time_series_relation(
+        db,
+        collection_id,
+        attribute_id,
+        :read,
+    )
+
+    attribute = _get_attribute(db, collection_id, attribute_id)
+
+    # Read IDs using the TimeController cache (works for Int type)
+    collection_attribute = _collection_attribute(collection_id, attribute_id)
+    if !haskey(db._time_controller.cache, collection_attribute)
+        db._time_controller.cache[collection_attribute] = _start_time_controller_cache(
+            db,
+            attribute,
+            date_time,
+            Int,  # Time series relations store IDs as Int
+        )
+    end
+
+    cache = db._time_controller.cache[collection_attribute]
+    ids = query_data_in_time_controller(cache, date_time)
+
+    # Convert IDs to labels using cached mapping
+    id_to_label_mapping = _get_id_to_label_mapping(db, attribute.relation_collection)
+
+    labels = Vector{String}(undef, length(ids))
+    for (i, id_val) in enumerate(ids)
+        labels[i] = get(id_to_label_mapping, id_val, "")
+    end
+
+    return labels
+end
+
+"""
     _treat_query_result(query_results::Vector{Missing}, attribute::Attribute, default::Union{Nothing, Any})
 
 Internal function to process query results that are all missing values, replacing them with appropriate defaults.

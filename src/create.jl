@@ -185,6 +185,8 @@ function _create_time_series!(
         DataFrames.insertcols!(df, 1, :id => ids)
         # Convert datetime column to string
         df[!, :date_time] = string.(df[!, :date_time])
+        # Convert time series relation labels to IDs
+        _replace_time_series_relation_labels_with_ids!(db, collection_id, string(group), df)
         # Add missing columns
         missing_names_in_df = setdiff(_attributes_in_time_series_group(db, collection_id, string(group)), string.(names(df)))
         for missing_attribute in missing_names_in_df
@@ -465,6 +467,46 @@ function _replace_set_relation_labels_with_ids!(
                 end
             end
             set_attributes[key] = vec_of_ids
+        end
+    end
+    return nothing
+end
+
+function _replace_time_series_relation_labels_with_ids!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    group_id::String,
+    df::DataFrame,
+)
+    collection = _get_collection(db, collection_id)
+
+    for (attr_name, attribute) in collection.time_series_relations
+        if attribute.group_id == group_id && string(attr_name) in names(df)
+            # Convert labels to IDs
+            relation_collection = attribute.relation_collection
+
+            # Create a vector of IDs to replace the entire column
+            ids = Vector{Int}(undef, nrow(df))
+            for i in 1:nrow(df)
+                value = df[i, attr_name]
+                if ismissing(value)
+                    ids[i] = _PSRDatabase_null_value(Int)
+                elseif isa(value, String)
+                    if !_is_null_in_db(value)
+                        ids[i] = _get_id(db, relation_collection, value)
+                    else
+                        ids[i] = _PSRDatabase_null_value(Int)
+                    end
+                elseif isa(value, Int) || isa(value, Integer)
+                    # Already an ID, keep it
+                    ids[i] = value
+                else
+                    ids[i] = _PSRDatabase_null_value(Int)
+                end
+            end
+
+            # Replace the entire column
+            df[!, attr_name] = ids
         end
     end
     return nothing

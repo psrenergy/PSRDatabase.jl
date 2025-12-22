@@ -197,6 +197,15 @@ function _is_time_series(
     return haskey(collection.time_series, attribute_id)
 end
 
+function _is_time_series_relation(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+)
+    collection = _get_collection(db, collection_id)
+    return haskey(collection.time_series_relations, attribute_id)
+end
+
 function _is_time_series_group(
     db::DatabaseSQLite,
     collection_id::String,
@@ -269,6 +278,8 @@ function _get_attribute(
         return collection.set_relations[attribute_id]
     elseif _is_time_series(db, collection_id, attribute_id)
         return collection.time_series[attribute_id]
+    elseif _is_time_series_relation(db, collection_id, attribute_id)
+        return collection.time_series_relations[attribute_id]
     elseif _is_time_series_file(db, collection_id, attribute_id)
         return collection.time_series_files[attribute_id]
     else
@@ -327,6 +338,7 @@ function _attribute_exists(
            _is_vector_relation(db, collection_id, attribute_id) ||
            _is_set_relation(db, collection_id, attribute_id) ||
            _is_time_series(db, collection_id, attribute_id) ||
+           _is_time_series_relation(db, collection_id, attribute_id) ||
            _is_time_series_file(db, collection_id, attribute_id)
 end
 
@@ -400,6 +412,11 @@ function _attributes_in_time_series_group(
     collection = _get_collection(db, collection_id)
     attributes_in_time_series_group = Vector{String}(undef, 0)
     for (_, attribute) in collection.time_series
+        if attribute.group_id == group_id
+            push!(attributes_in_time_series_group, attribute.id)
+        end
+    end
+    for (_, attribute) in collection.time_series_relations
         if attribute.group_id == group_id
             push!(attributes_in_time_series_group, attribute.id)
         end
