@@ -389,6 +389,90 @@ function test_generate_code_throws_both_path_schema_and_path_migrations()
     return nothing
 end
 
+function test_generate_code_from_time_series_relations()
+    path_schema = joinpath(@__DIR__, "..", "test_time_series_relations", "test_schema.sql")
+    db_path = joinpath(@__DIR__, "test_generate_code_time_series_relations.sqlite")
+    db_reconstructed_path = joinpath(@__DIR__, "test_generate_code_time_series_relations_reconstructed.sqlite")
+    code_path = joinpath(@__DIR__, "test_generate_code_time_series_relations_code.jl")
+
+    # Create and populate original database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; value1 = 1.0)
+
+    # Create plants
+    PSRDatabase.create_element!(db, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db, "Plant"; label = "Plant 2")
+    PSRDatabase.create_element!(db, "Plant"; label = "Plant 3")
+
+    # Create resource with time series relations (single dimension)
+    df_generation = DataFrame(;
+        date_time = [DateTime(2000), DateTime(2001), DateTime(2002)],
+        power = [100.0, 200.0, 300.0],
+        plant_id = ["Plant 1", "Plant 2", "Plant 3"],
+    )
+    PSRDatabase.create_element!(
+        db,
+        "Resource";
+        label = "Resource 1",
+        generation = df_generation,
+    )
+
+    # Create resource with time series relations (multiple dimensions)
+    df_dispatch = DataFrame(;
+        date_time = [DateTime(2000), DateTime(2000), DateTime(2001)],
+        block = [1, 2, 1],
+        scenario = [1, 1, 1],
+        energy = [50.0, 75.0, 100.0],
+        plant_dispatch_id = ["Plant 1", "Plant 2", "Plant 1"],
+    )
+    PSRDatabase.create_element!(
+        db,
+        "Resource";
+        label = "Resource 2",
+        dispatch = df_dispatch,
+    )
+
+    # Generate code to file
+    PSRDatabase.generate_julia_script_from_database(
+        db,
+        code_path,
+        db_reconstructed_path;
+        path_schema = path_schema,
+    )
+
+    include(code_path)
+
+    # Reload both databases
+    db1 = PSRDatabase.load_db(db_path; read_only = true)
+    db2 = PSRDatabase.load_db(db_reconstructed_path; read_only = true)
+
+    # Compare databases
+    @test isempty(PSRDatabase.compare_databases(db1, db2))
+
+    # Additional verification: Check specific time series relation values
+    df_gen_1 = PSRDatabase.read_time_series_relation_table(db2, "Resource", "plant_id", "Resource 1")
+    @test nrow(df_gen_1) == 3
+    @test df_gen_1[1, :plant_id] == "Plant 1"
+    @test df_gen_1[2, :plant_id] == "Plant 2"
+    @test df_gen_1[3, :plant_id] == "Plant 3"
+
+    df_dispatch_2 = PSRDatabase.read_time_series_relation_table(db2, "Resource", "plant_dispatch_id", "Resource 2")
+    @test nrow(df_dispatch_2) == 3
+    @test df_dispatch_2[1, :plant_dispatch_id] == "Plant 1"
+    @test df_dispatch_2[2, :plant_dispatch_id] == "Plant 2"
+    @test df_dispatch_2[3, :plant_dispatch_id] == "Plant 1"
+
+    # Cleanup
+    PSRDatabase.close!(db)
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(db_path)
+    rm(db_reconstructed_path)
+    rm(code_path)
+
+    return nothing
+end
+
 function runtests()
     Base.GC.gc()
     Base.GC.gc()
