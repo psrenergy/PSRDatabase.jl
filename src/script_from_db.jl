@@ -190,6 +190,12 @@ function _generate_element_code(
         append!(relation_lines, set_relations)
     end
 
+    # Collect time series relations to be set at the end
+    time_series_relations = _generate_time_series_relations_code(db, collection, element_id, label)
+    if !isempty(time_series_relations)
+        append!(relation_lines, time_series_relations)
+    end
+
     return join(code_lines, "\n"), relation_lines
 end
 
@@ -327,7 +333,8 @@ end
 """
     _generate_time_series_parameters_code(db::DatabaseSQLite, collection::Collection, element_id::Int)
 
-Generate code for time series data as DataFrames.
+Generate code for time series data as DataFrames (excluding time series relations).
+Time series relations are handled separately to avoid dependency issues.
 """
 function _generate_time_series_parameters_code(
     db::DatabaseSQLite,
@@ -336,7 +343,7 @@ function _generate_time_series_parameters_code(
 )
     code_lines = String[]
 
-    # Group time series by group_id
+    # Group time series by group_id (only parameters, not relations)
     time_series_groups = Dict{String, Vector{String}}()
     for (attr_id, attr) in collection.time_series
         group_id = attr.group_id
@@ -346,7 +353,22 @@ function _generate_time_series_parameters_code(
         push!(time_series_groups[group_id], attr_id)
     end
 
-    for (group_id, attr_ids) in time_series_groups
+    # Also collect time series relation group IDs to know which columns to exclude
+    time_series_relation_columns = Set{String}()
+    for (rel_attr_id, rel_attr) in collection.time_series_relations
+        push!(time_series_relation_columns, rel_attr_id)
+    end
+
+    # Process all time series groups (including those with relations)
+    all_groups = Set{String}()
+    for (attr_id, attr) in collection.time_series
+        push!(all_groups, attr.group_id)
+    end
+    for (attr_id, attr) in collection.time_series_relations
+        push!(all_groups, attr.group_id)
+    end
+
+    for group_id in all_groups
         # Read time series data for this group
         df = _read_time_series_group_data(db, collection.id, group_id, element_id)
 
@@ -354,12 +376,40 @@ function _generate_time_series_parameters_code(
             continue
         end
 
+        # Exclude relation columns from the DataFrame
+        df_filtered = select(df, Not(collect(intersect(names(df), time_series_relation_columns))))
+
+        # Only include if there are non-dimension columns left (parameters)
+        if ncol(df_filtered) <= length(_get_time_series_dimensions(collection, group_id))
+            continue
+        end
+
         # Generate DataFrame code
-        df_code = _generate_dataframe_code(df, group_id)
+        df_code = _generate_dataframe_code(df_filtered, group_id)
         push!(code_lines, "    $group_id = $df_code,")
     end
 
     return code_lines
+end
+
+"""
+    _get_time_series_dimensions(collection::Collection, group_id::String)
+
+Get dimension names for a time series group.
+"""
+function _get_time_series_dimensions(collection::Collection, group_id::String)
+    # Get dimensions from any time series or time series relation in this group
+    for (attr_id, attr) in collection.time_series
+        if attr.group_id == group_id
+            return attr.dimension_names
+        end
+    end
+    for (attr_id, attr) in collection.time_series_relations
+        if attr.group_id == group_id
+            return attr.dimension_names
+        end
+    end
+    return String[]
 end
 
 """
@@ -524,6 +574,90 @@ function _generate_set_relations_code(
                 code_lines,
                 "PSRDatabase.set_relation!(db, \"$(collection.id)\", \"$(attr.relation_collection)\", \"$label\", $formatted_labels, \"$(attr.relation_type)\")",
             )
+        end
+    end
+
+    return code_lines
+end
+
+"""
+    _generate_time_series_relations_code(db::DatabaseSQLite, collection::Collection, element_id::Int, label::String)
+
+Generate code for adding time series relations row by row.
+"""
+function _generate_time_series_relations_code(
+    db::DatabaseSQLite,
+    collection::Collection,
+    element_id::Int,
+    label::String,
+)
+    code_lines = String[]
+
+    # Group time series relations by group_id
+    time_series_relation_groups = Dict{String, Vector{String}}()
+    for (attr_id, attr) in collection.time_series_relations
+        group_id = attr.group_id
+        if !haskey(time_series_relation_groups, group_id)
+            time_series_relation_groups[group_id] = String[]
+        end
+        push!(time_series_relation_groups[group_id], attr_id)
+    end
+
+    for (group_id, attr_ids) in time_series_relation_groups
+        # Read time series data for this group
+        df = _read_time_series_group_data(db, collection.id, group_id, element_id)
+
+        if isempty(df)
+            continue
+        end
+
+        # For each relation attribute, generate add_time_series_relation_row! calls
+        for attr_id in attr_ids
+            attr = collection.time_series_relations[attr_id]
+            relation_collection = attr.relation_collection
+
+            if !(attr_id in names(df))
+                continue
+            end
+
+            # Generate code for each row
+            for row_idx in 1:nrow(df)
+                row = df[row_idx, :]
+                id_val = row[attr_id]
+
+                # Get related element label
+                if ismissing(id_val) || isnothing(id_val)
+                    related_label = ""
+                else
+                    related_label = _get_label_by_id(db, relation_collection, id_val)
+                end
+
+                # Skip empty relations
+                if isempty(related_label)
+                    continue
+                end
+
+                # Build dimensions from the row (only actual dimension columns)
+                dimension_parts = String[]
+                for dim_name in attr.dimension_names
+                    if dim_name in names(df)
+                        col_val = row[dim_name]
+                        if dim_name == "date_time"
+                            push!(dimension_parts, "date_time = DateTime(\"$col_val\")")
+                        else
+                            formatted_val = _format_value(col_val, typeof(col_val))
+                            push!(dimension_parts, "$dim_name = $formatted_val")
+                        end
+                    end
+                end
+
+                dimensions_str = join(dimension_parts, ", ")
+
+                push!(
+                    code_lines,
+                    "PSRDatabase.add_time_series_relation_row!(db, \"$(collection.id)\", \"$attr_id\", \"$label\", \"$related_label\"; $dimensions_str)",
+                )
+            end
         end
     end
 

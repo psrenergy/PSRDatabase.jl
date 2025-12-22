@@ -1300,6 +1300,522 @@ function test_compare_set_relations_null_mismatch()
     return nothing
 end
 
+function test_compare_time_series_relations_identical()
+    path_schema = joinpath(@__DIR__, "..", "test_time_series_relations", "test_schema.sql")
+    db1 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db1.sqlite"),
+        path_schema;
+        force = true,
+    )
+    db2 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db2.sqlite"),
+        path_schema;
+        force = true,
+    )
+
+    # Create configuration
+    PSRDatabase.create_element!(db1, "Configuration"; value1 = 1.0)
+    PSRDatabase.create_element!(db2, "Configuration"; value1 = 1.0)
+
+    # Create plants
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 2")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 2")
+
+    # Create resources
+    PSRDatabase.create_element!(db1, "Resource"; label = "Resource 1")
+    PSRDatabase.create_element!(db2, "Resource"; label = "Resource 1")
+
+    # Create identical time series relations
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 2";
+        date_time = DateTime(2001),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 2";
+        date_time = DateTime(2001),
+    )
+
+    differences = PSRDatabase.compare_time_series_relations(db1, db2, "Resource")
+    @test isempty(differences)
+
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(joinpath(@__DIR__, "test_db1.sqlite"); force = true)
+    rm(joinpath(@__DIR__, "test_db2.sqlite"); force = true)
+    return nothing
+end
+
+function test_compare_time_series_relations_different_values()
+    path_schema = joinpath(@__DIR__, "..", "test_time_series_relations", "test_schema.sql")
+    db1 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db1.sqlite"),
+        path_schema;
+        force = true,
+    )
+    db2 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db2.sqlite"),
+        path_schema;
+        force = true,
+    )
+
+    # Create configuration
+    PSRDatabase.create_element!(db1, "Configuration"; value1 = 1.0)
+    PSRDatabase.create_element!(db2, "Configuration"; value1 = 1.0)
+
+    # Create plants
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 2")
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 3")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 2")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 3")
+
+    # Create resources
+    PSRDatabase.create_element!(db1, "Resource"; label = "Resource 1")
+    PSRDatabase.create_element!(db2, "Resource"; label = "Resource 1")
+
+    # Create time series relations with different values
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 2";
+        date_time = DateTime(2001),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 3";
+        date_time = DateTime(2001),
+    )
+
+    differences = PSRDatabase.compare_time_series_relations(db1, db2, "Resource")
+    @test !isempty(differences)
+    @test any(occursin("plant_id", diff) for diff in differences)
+    @test any(occursin("Plant 2", diff) && occursin("Plant 3", diff) for diff in differences)
+
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(joinpath(@__DIR__, "test_db1.sqlite"); force = true)
+    rm(joinpath(@__DIR__, "test_db2.sqlite"); force = true)
+    return nothing
+end
+
+function test_compare_time_series_relations_different_sizes()
+    path_schema = joinpath(@__DIR__, "..", "test_time_series_relations", "test_schema.sql")
+    db1 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db1.sqlite"),
+        path_schema;
+        force = true,
+    )
+    db2 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db2.sqlite"),
+        path_schema;
+        force = true,
+    )
+
+    # Create configuration
+    PSRDatabase.create_element!(db1, "Configuration"; value1 = 1.0)
+    PSRDatabase.create_element!(db2, "Configuration"; value1 = 1.0)
+
+    # Create plants
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 2")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 2")
+
+    # Create resources
+    PSRDatabase.create_element!(db1, "Resource"; label = "Resource 1")
+    PSRDatabase.create_element!(db2, "Resource"; label = "Resource 1")
+
+    # Create time series relations with different sizes
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 2";
+        date_time = DateTime(2001),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2002),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 2";
+        date_time = DateTime(2001),
+    )
+
+    differences = PSRDatabase.compare_time_series_relations(db1, db2, "Resource")
+    @test !isempty(differences)
+    @test any(occursin("different table sizes", diff) for diff in differences)
+
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(joinpath(@__DIR__, "test_db1.sqlite"); force = true)
+    rm(joinpath(@__DIR__, "test_db2.sqlite"); force = true)
+    return nothing
+end
+
+function test_compare_time_series_relations_multi_dimensions_identical()
+    path_schema = joinpath(@__DIR__, "..", "test_time_series_relations", "test_schema.sql")
+    db1 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db1.sqlite"),
+        path_schema;
+        force = true,
+    )
+    db2 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db2.sqlite"),
+        path_schema;
+        force = true,
+    )
+
+    # Create configuration
+    PSRDatabase.create_element!(db1, "Configuration"; value1 = 1.0)
+    PSRDatabase.create_element!(db2, "Configuration"; value1 = 1.0)
+
+    # Create plants
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 2")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 2")
+
+    # Create resources
+    PSRDatabase.create_element!(db1, "Resource"; label = "Resource 1")
+    PSRDatabase.create_element!(db2, "Resource"; label = "Resource 1")
+
+    # Create identical time series relations with multiple dimensions
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_dispatch_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+        block = 1,
+        scenario = 1,
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_dispatch_id",
+        "Resource 1",
+        "Plant 2";
+        date_time = DateTime(2000),
+        block = 2,
+        scenario = 1,
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_dispatch_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+        block = 1,
+        scenario = 1,
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_dispatch_id",
+        "Resource 1",
+        "Plant 2";
+        date_time = DateTime(2000),
+        block = 2,
+        scenario = 1,
+    )
+
+    differences = PSRDatabase.compare_time_series_relations(db1, db2, "Resource")
+    @test isempty(differences)
+
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(joinpath(@__DIR__, "test_db1.sqlite"); force = true)
+    rm(joinpath(@__DIR__, "test_db2.sqlite"); force = true)
+    return nothing
+end
+
+function test_compare_time_series_relations_multi_dimensions_different_values()
+    path_schema = joinpath(@__DIR__, "..", "test_time_series_relations", "test_schema.sql")
+    db1 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db1.sqlite"),
+        path_schema;
+        force = true,
+    )
+    db2 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db2.sqlite"),
+        path_schema;
+        force = true,
+    )
+
+    # Create configuration
+    PSRDatabase.create_element!(db1, "Configuration"; value1 = 1.0)
+    PSRDatabase.create_element!(db2, "Configuration"; value1 = 1.0)
+
+    # Create plants
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 2")
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 3")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 2")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 3")
+
+    # Create resources
+    PSRDatabase.create_element!(db1, "Resource"; label = "Resource 1")
+    PSRDatabase.create_element!(db2, "Resource"; label = "Resource 1")
+
+    # Create time series relations with different values
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_dispatch_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+        block = 1,
+        scenario = 1,
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_dispatch_id",
+        "Resource 1",
+        "Plant 2";
+        date_time = DateTime(2000),
+        block = 2,
+        scenario = 1,
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_dispatch_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+        block = 1,
+        scenario = 1,
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_dispatch_id",
+        "Resource 1",
+        "Plant 3";
+        date_time = DateTime(2000),
+        block = 2,
+        scenario = 1,
+    )
+
+    differences = PSRDatabase.compare_time_series_relations(db1, db2, "Resource")
+    @test !isempty(differences)
+    @test any(occursin("plant_dispatch_id", diff) for diff in differences)
+    @test any(occursin("Plant 2", diff) && occursin("Plant 3", diff) for diff in differences)
+
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(joinpath(@__DIR__, "test_db1.sqlite"); force = true)
+    rm(joinpath(@__DIR__, "test_db2.sqlite"); force = true)
+    return nothing
+end
+
+function test_compare_time_series_relations_different_element_count()
+    path_schema = joinpath(@__DIR__, "..", "test_time_series_relations", "test_schema.sql")
+    db1 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db1.sqlite"),
+        path_schema;
+        force = true,
+    )
+    db2 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db2.sqlite"),
+        path_schema;
+        force = true,
+    )
+
+    # Create configuration
+    PSRDatabase.create_element!(db1, "Configuration"; value1 = 1.0)
+    PSRDatabase.create_element!(db2, "Configuration"; value1 = 1.0)
+
+    # Create plants
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 1")
+
+    # Create different number of resources
+    PSRDatabase.create_element!(db1, "Resource"; label = "Resource 1")
+    PSRDatabase.create_element!(db1, "Resource"; label = "Resource 2")
+    PSRDatabase.create_element!(db2, "Resource"; label = "Resource 1")
+
+    # Create time series relations
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 2",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+
+    differences = PSRDatabase.compare_time_series_relations(db1, db2, "Resource")
+    @test !isempty(differences)
+    @test any(occursin("different number of elements", diff) for diff in differences)
+
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(joinpath(@__DIR__, "test_db1.sqlite"); force = true)
+    rm(joinpath(@__DIR__, "test_db2.sqlite"); force = true)
+    return nothing
+end
+
+function test_compare_time_series_relations_null_vs_non_null()
+    path_schema = joinpath(@__DIR__, "..", "test_time_series_relations", "test_schema.sql")
+    db1 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db1.sqlite"),
+        path_schema;
+        force = true,
+    )
+    db2 = PSRDatabase.create_empty_db_from_schema(
+        joinpath(@__DIR__, "test_db2.sqlite"),
+        path_schema;
+        force = true,
+    )
+
+    # Create configuration
+    PSRDatabase.create_element!(db1, "Configuration"; value1 = 1.0)
+    PSRDatabase.create_element!(db2, "Configuration"; value1 = 1.0)
+
+    # Create plants
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db1, "Plant"; label = "Plant 2")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 1")
+    PSRDatabase.create_element!(db2, "Plant"; label = "Plant 2")
+
+    # Create resources
+    PSRDatabase.create_element!(db1, "Resource"; label = "Resource 1")
+    PSRDatabase.create_element!(db2, "Resource"; label = "Resource 1")
+
+    # Create time series relations
+    # db1 has data for both date_times, db2 only has data for one date_time
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db1,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 2";
+        date_time = DateTime(2001),
+    )
+    PSRDatabase.add_time_series_relation_row!(
+        db2,
+        "Resource",
+        "plant_id",
+        "Resource 1",
+        "Plant 1";
+        date_time = DateTime(2000),
+    )
+
+    differences = PSRDatabase.compare_time_series_relations(db1, db2, "Resource")
+    @test !isempty(differences)
+    @test any(occursin("different table sizes", diff) for diff in differences)
+
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(joinpath(@__DIR__, "test_db1.sqlite"); force = true)
+    rm(joinpath(@__DIR__, "test_db2.sqlite"); force = true)
+    return nothing
+end
+
 function runtests()
     for name in names(@__MODULE__; all = true)
         if startswith("$(name)", "test_")
