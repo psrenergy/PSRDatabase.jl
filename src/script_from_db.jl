@@ -276,7 +276,9 @@ end
 """
     _generate_set_parameters_code(db::DatabaseSQLite, collection::Collection, element_id::Int)
 
-Generate code for set parameters grouped by their group_id.
+Generate code for set parameters and relations grouped by their group_id.
+This includes both set parameters and set relations that belong to the same group,
+as they must be created together in the same create_element! call.
 """
 function _generate_set_parameters_code(
     db::DatabaseSQLite,
@@ -289,16 +291,16 @@ function _generate_set_parameters_code(
     groups_map = _map_of_groups_to_set_attributes(db, collection.id)
 
     for (group_id, attr_ids) in groups_map
-        # Only get parameter attributes (not relations)
+        # Get both parameter and relation attributes in this group
         param_attrs = String[]
+        relation_attrs = String[]
+
         for attr_id in attr_ids
             if haskey(collection.set_parameters, attr_id)
                 push!(param_attrs, attr_id)
+            elseif haskey(collection.set_relations, attr_id)
+                push!(relation_attrs, attr_id)
             end
-        end
-
-        if isempty(param_attrs)
-            continue
         end
 
         # Read set data for this group
@@ -308,7 +310,7 @@ function _generate_set_parameters_code(
             continue
         end
 
-        # Generate Set literal for each attribute
+        # Generate array literal for each parameter attribute
         for attr_id in param_attrs
             if haskey(set_data, attr_id)
                 values = set_data[attr_id]
@@ -316,6 +318,29 @@ function _generate_set_parameters_code(
                 if any(!_is_null_in_db(v) for v in values)
                     formatted_values = _format_set(values, collection.set_parameters[attr_id].type)
                     push!(code_lines, "    $attr_id = $formatted_values,")
+                end
+            end
+        end
+
+        # Generate array literal for each relation attribute (convert IDs to labels)
+        for attr_id in relation_attrs
+            if haskey(set_data, attr_id)
+                ids = set_data[attr_id]
+                # Convert IDs to labels
+                labels = String[]
+                for id_val in ids
+                    if !ismissing(id_val) && !isnothing(id_val) && !_is_null_in_db(id_val)
+                        label = _get_label_by_id(db, collection.set_relations[attr_id].relation_collection, id_val)
+                        push!(labels, label)
+                    else
+                        push!(labels, "")
+                    end
+                end
+
+                # Only include if not all empty
+                if !all(isempty, labels)
+                    formatted_labels = "[" * join(["\"$l\"" for l in labels], ", ") * "]"
+                    push!(code_lines, "    $attr_id = $formatted_labels,")
                 end
             end
         end
@@ -468,7 +493,8 @@ end
 """
     _generate_set_relations_code(db::DatabaseSQLite, collection::Collection, element_id::Int, label::String)
 
-Generate code for setting set relations.
+Generate code for setting set relations that are not in the same group as set parameters.
+Relations in groups with parameters are already included in create_element! call.
 """
 function _generate_set_relations_code(
     db::DatabaseSQLite,
@@ -482,6 +508,14 @@ function _generate_set_relations_code(
     groups_map = _map_of_groups_to_set_attributes(db, collection.id)
 
     for (group_id, attr_ids) in groups_map
+        # Check if this group has any set parameters
+        has_parameters = any(attr_id -> haskey(collection.set_parameters, attr_id), attr_ids)
+
+        # Skip this group if it has parameters (already handled in create_element!)
+        if has_parameters
+            continue
+        end
+
         # Only get relation attributes
         for attr_id in attr_ids
             if !haskey(collection.set_relations, attr_id)
@@ -522,7 +556,7 @@ function _generate_set_relations_code(
             formatted_labels = "[" * join(["\"$l\"" for l in related_labels], ", ") * "]"
             push!(
                 code_lines,
-                "PSRDatabase.set_relation!(db, \"$(collection.id)\", \"$(attr.relation_collection)\", \"$label\", $formatted_labels, \"$(attr.relation_type)\")",
+                "PSRDatabase.set_set_relation!(db, \"$(collection.id)\", \"$(attr.relation_collection)\", \"$label\", $formatted_labels, \"$(attr.relation_type)\")",
             )
         end
     end
@@ -708,21 +742,18 @@ function _read_set_group_data(
     element_id::Int,
 )
     table_name = _set_group_table_name(collection_id, group_id)
-    query = "SELECT * FROM $table_name WHERE id = $element_id"
+    query = "SELECT * FROM $table_name WHERE id = $element_id ORDER BY rowid"
     df = DBInterface.execute(db.sqlite_db, query) |> DataFrame
 
     if isempty(df)
-        return Dict{String, Set}()
+        return Dict{String, Vector}()
     end
 
-    # Convert DataFrame to Dict of sets
-    result = Dict{String, Set}()
+    # Convert DataFrame to Dict of vectors
+    result = Dict{String, Vector}()
     for col_name in names(df)
         if col_name != "id"
-            # Collect all non-missing values into a Set
-            values = df[!, col_name]
-            non_missing_values = filter(!ismissing, values)
-            result[col_name] = Set(non_missing_values)
+            result[col_name] = df[!, col_name]
         end
     end
 
@@ -742,16 +773,14 @@ function _read_set_relation_data(
     element_id::Int,
 )
     table_name = _set_group_table_name(collection_id, group_id)
-    query = "SELECT $attribute_id FROM $table_name WHERE id = $element_id"
+    query = "SELECT $attribute_id FROM $table_name WHERE id = $element_id ORDER BY rowid"
     df = DBInterface.execute(db.sqlite_db, query) |> DataFrame
 
     if isempty(df)
-        return Set{Int}()
+        return Int[]
     end
 
-    values = df[!, attribute_id]
-    non_missing_values = filter(!ismissing, values)
-    return Set(non_missing_values)
+    return df[!, attribute_id]
 end
 
 """
@@ -852,11 +881,11 @@ function _format_vector(values::Vector, type::Type)
 end
 
 """
-    _format_set(values::Set, type::Type)
+    _format_set(values::Vector, type::Type)
 
 Format a set for code generation.
 """
-function _format_set(values::Set, type::Type)
+function _format_set(values::Vector, type::Type)
     # Filter out null values before formatting
     non_null_values = [v for v in values if !_is_null_in_db(v)]
     formatted_values = [_format_value(v, type) for v in non_null_values]
