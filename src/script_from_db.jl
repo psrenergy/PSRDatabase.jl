@@ -69,7 +69,7 @@ function generate_julia_script_from_database(
             append!(relation_lines, collection_relations)
         end
     end
-    
+
     # Add relations section at the end
     if !isempty(relation_lines)
         push!(code_lines, "# Setting relations")
@@ -103,7 +103,7 @@ function _generate_collection_code(db::DatabaseSQLite, collection_id::String)
     # Generate time series files
     collection = _get_collection(db, collection_id)
     time_series_files = _generate_time_series_files_code(db, collection)
-    
+
     num_elements = number_of_elements(db, collection_id)
     if num_elements == 0 && isempty(time_series_files)
         push!(code_lines, "# No elements in $collection_id")
