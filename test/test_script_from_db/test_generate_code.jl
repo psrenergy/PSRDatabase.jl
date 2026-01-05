@@ -518,6 +518,85 @@ function test_generate_code_from_sets_with_only_relations()
     return nothing
 end
 
+function test_generate_code_time_series_files()
+    path_schema = joinpath(@__DIR__, "..", "test_create", "test_create_parameters_and_vectors.sql")
+    db_path = joinpath(@__DIR__, "test_generate_code_time_series_files.sqlite")
+    db_reconstructed_path = joinpath(@__DIR__, "test_generate_code_time_series_files_reconstructed.sqlite")
+    code_path = joinpath(@__DIR__, "test_generate_code_time_series_files_code.jl")
+
+    # Create and populate original database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
+    PSRDatabase.create_element!(db, "Plant"; label = "Plant1", capacity = 100.0)
+    PSRDatabase.set_time_series_file!(db, "Plant"; generation = "generation1.csv")
+
+    # Generate code to file
+    PSRDatabase.generate_julia_script_from_database(
+        db,
+        code_path,
+        db_reconstructed_path;
+        path_schema = path_schema,
+    )
+
+    include(code_path)
+
+    # Reload both databases
+    db1 = PSRDatabase.load_db(db_path; read_only = true)
+    db2 = PSRDatabase.load_db(db_reconstructed_path; read_only = true)
+
+    # Compare databases
+    @test isempty(PSRDatabase.compare_databases(db1, db2))
+
+    # Cleanup
+    PSRDatabase.close!(db)
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(db_path)
+    rm(db_reconstructed_path)
+    rm(code_path)
+
+    return nothing
+end
+
+function test_generate_code_only_time_series_files_in_db()
+    path_schema = joinpath(@__DIR__, "..", "test_create", "test_create_parameters_and_vectors.sql")
+    db_path = joinpath(@__DIR__, "test_generate_code_only_time_series_files_in_db.sqlite")
+    db_reconstructed_path = joinpath(@__DIR__, "test_generate_code_only_time_series_files_in_db_reconstructed.sqlite")
+    code_path = joinpath(@__DIR__, "test_generate_code_only_time_series_files_in_db_code.jl")
+
+    # Create and populate original database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
+    PSRDatabase.set_time_series_file!(db, "Plant"; generation = "generation1.csv")
+
+    # Generate code to file
+    PSRDatabase.generate_julia_script_from_database(
+        db,
+        code_path,
+        db_reconstructed_path;
+        path_schema = path_schema,
+    )
+
+    include(code_path)
+
+    # Reload both databases
+    db1 = PSRDatabase.load_db(db_path; read_only = true)
+    db2 = PSRDatabase.load_db(db_reconstructed_path; read_only = true)
+
+    # Compare databases
+    @test isempty(PSRDatabase.compare_databases(db1, db2))
+
+    # Cleanup
+    PSRDatabase.close!(db)
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(db_path)
+    rm(db_reconstructed_path)
+    rm(code_path)
+
+    return nothing
+end
+
 function runtests()
     Base.GC.gc()
     Base.GC.gc()

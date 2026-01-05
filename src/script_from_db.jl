@@ -69,7 +69,7 @@ function generate_julia_script_from_database(
             append!(relation_lines, collection_relations)
         end
     end
-
+    
     # Add relations section at the end
     if !isempty(relation_lines)
         push!(code_lines, "# Setting relations")
@@ -100,13 +100,15 @@ function _generate_collection_code(db::DatabaseSQLite, collection_id::String)
     code_lines = String[]
     relation_lines = String[]
 
+    # Generate time series files
+    collection = _get_collection(db, collection_id)
+    time_series_files = _generate_time_series_files_code(db, collection)
+    
     num_elements = number_of_elements(db, collection_id)
-    if num_elements == 0
+    if num_elements == 0 && isempty(time_series_files)
         push!(code_lines, "# No elements in $collection_id")
         return join(code_lines, "\n"), relation_lines
     end
-
-    collection = _get_collection(db, collection_id)
 
     # Get all element IDs and labels
     element_ids = _read_all_ids(db, collection_id)
@@ -122,6 +124,10 @@ function _generate_collection_code(db::DatabaseSQLite, collection_id::String)
         if !isempty(element_relations)
             append!(relation_lines, element_relations)
         end
+    end
+
+    if !isempty(time_series_files)
+        append!(code_lines, time_series_files)
     end
 
     return join(code_lines, "\n"), relation_lines
@@ -164,13 +170,6 @@ function _generate_element_code(
     append!(code_lines, time_series_params)
 
     push!(code_lines, ")")
-
-    # Generate time series files (immediately after element creation)
-    time_series_files = _generate_time_series_files_code(db, collection, element_id, label)
-    if !isempty(time_series_files)
-        push!(code_lines, "")
-        append!(code_lines, time_series_files)
-    end
 
     # Collect scalar relations to be set at the end
     scalar_relations = _generate_scalar_relations_code(db, collection, element_id, label)
@@ -485,15 +484,13 @@ function _generate_vector_relations_code(
 end
 
 """
-    _generate_time_series_files_code(db::DatabaseSQLite, collection::Collection, element_id::Int, label::String)
+    _generate_time_series_files_code(db::DatabaseSQLite, collection::Collection)
 
 Generate code for setting time series file paths.
 """
 function _generate_time_series_files_code(
     db::DatabaseSQLite,
     collection::Collection,
-    element_id::Int,
-    label::String,
 )
     code_lines = String[]
 
@@ -506,7 +503,7 @@ function _generate_time_series_files_code(
 
         push!(
             code_lines,
-            "PSRDatabase.set_time_series_file!(db, \"$(collection.id)\", \"$attr_id\", \"$label\", \"$file_path\")",
+            "PSRDatabase.set_time_series_file!(db, \"$(collection.id)\", $attr_id = \"$file_path\")",
         )
     end
 
