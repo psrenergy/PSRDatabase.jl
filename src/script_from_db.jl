@@ -184,12 +184,6 @@ function _generate_element_code(
         append!(relation_lines, vector_relations)
     end
 
-    # Collect set relations to be set at the end
-    set_relations = _generate_set_relations_code(db, collection, element_id, label)
-    if !isempty(set_relations)
-        append!(relation_lines, set_relations)
-    end
-
     return join(code_lines, "\n"), relation_lines
 end
 
@@ -483,80 +477,6 @@ function _generate_vector_relations_code(
             push!(
                 code_lines,
                 "PSRDatabase.set_vector_relation!(db, \"$(collection.id)\", \"$(attr.relation_collection)\", \"$label\", $formatted_labels, \"$(attr.relation_type)\")",
-            )
-        end
-    end
-
-    return code_lines
-end
-
-"""
-    _generate_set_relations_code(db::DatabaseSQLite, collection::Collection, element_id::Int, label::String)
-
-Generate code for setting set relations that are not in the same group as set parameters.
-Relations in groups with parameters are already included in create_element! call.
-"""
-function _generate_set_relations_code(
-    db::DatabaseSQLite,
-    collection::Collection,
-    element_id::Int,
-    label::String,
-)
-    code_lines = String[]
-
-    # Group set relations by group_id
-    groups_map = _map_of_groups_to_set_attributes(db, collection.id)
-
-    for (group_id, attr_ids) in groups_map
-        # Check if this group has any set parameters
-        has_parameters = any(attr_id -> haskey(collection.set_parameters, attr_id), attr_ids)
-
-        # Skip this group if it has parameters (already handled in create_element!)
-        if has_parameters
-            continue
-        end
-
-        # Only get relation attributes
-        for attr_id in attr_ids
-            if !haskey(collection.set_relations, attr_id)
-                continue
-            end
-
-            attr = collection.set_relations[attr_id]
-
-            # Read set relation data
-            related_ids = _read_set_relation_data(
-                db,
-                collection.id,
-                group_id,
-                attr_id,
-                element_id,
-            )
-
-            if isempty(related_ids)
-                continue
-            end
-
-            # Convert IDs to labels
-            related_labels = String[]
-            for rid in related_ids
-                if !ismissing(rid) && !isnothing(rid)
-                    rlabel = _get_label_by_id(db, attr.relation_collection, rid)
-                    push!(related_labels, rlabel)
-                else
-                    push!(related_labels, "")
-                end
-            end
-
-            # Skip if all relations are empty
-            if all(isempty, related_labels)
-                continue
-            end
-
-            formatted_labels = "[" * join(["\"$l\"" for l in related_labels], ", ") * "]"
-            push!(
-                code_lines,
-                "PSRDatabase.set_set_relation!(db, \"$(collection.id)\", \"$(attr.relation_collection)\", \"$label\", $formatted_labels, \"$(attr.relation_type)\")",
             )
         end
     end
