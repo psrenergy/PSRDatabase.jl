@@ -430,6 +430,48 @@ function test_generate_code_from_time_series_relations()
         "Resource";
         label = "Resource 2",
         dispatch = df_dispatch,
+    )
+
+    # Generate code to file
+    PSRDatabase.generate_julia_script_from_database(
+        db,
+        code_path,
+        db_reconstructed_path;
+        path_schema = path_schema,
+    )
+
+    include(code_path)
+
+    # Reload both databases
+    db1 = PSRDatabase.load_db(db_path; read_only = true)
+    db2 = PSRDatabase.load_db(db_reconstructed_path; read_only = true)
+
+    # Compare databases
+    @test isempty(PSRDatabase.compare_databases(db1, db2))
+
+    # Additional verification: Check specific time series relation values
+    df_gen_1 = PSRDatabase.read_time_series_relation_table(db2, "Resource", "plant_id", "Resource 1")
+    @test nrow(df_gen_1) == 3
+    @test df_gen_1[1, :plant_id] == "Plant 1"
+    @test df_gen_1[2, :plant_id] == "Plant 2"
+    @test df_gen_1[3, :plant_id] == "Plant 3"
+
+    df_dispatch_2 = PSRDatabase.read_time_series_relation_table(db2, "Resource", "plant_dispatch_id", "Resource 2")
+    @test nrow(df_dispatch_2) == 3
+    @test df_dispatch_2[1, :plant_dispatch_id] == "Plant 1"
+    @test df_dispatch_2[2, :plant_dispatch_id] == "Plant 2"
+    @test df_dispatch_2[3, :plant_dispatch_id] == "Plant 1"
+
+    # Cleanup
+    PSRDatabase.close!(db)
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(db_path)
+    rm(db_reconstructed_path)
+    rm(code_path)
+
+    return nothing
+end
 
 function test_generate_code_from_sets_with_relations()
     path_schema = joinpath(@__DIR__, "..", "test_create", "test_create_sets_with_relations.sql")
@@ -549,20 +591,7 @@ function test_generate_code_from_sets_with_only_relations()
     # Compare databases
     @test isempty(PSRDatabase.compare_databases(db1, db2))
 
-    # Additional verification: Check specific time series relation values
-    df_gen_1 = PSRDatabase.read_time_series_relation_table(db2, "Resource", "plant_id", "Resource 1")
-    @test nrow(df_gen_1) == 3
-    @test df_gen_1[1, :plant_id] == "Plant 1"
-    @test df_gen_1[2, :plant_id] == "Plant 2"
-    @test df_gen_1[3, :plant_id] == "Plant 3"
-
-    df_dispatch_2 = PSRDatabase.read_time_series_relation_table(db2, "Resource", "plant_dispatch_id", "Resource 2")
-    @test nrow(df_dispatch_2) == 3
-    @test df_dispatch_2[1, :plant_dispatch_id] == "Plant 1"
-    @test df_dispatch_2[2, :plant_dispatch_id] == "Plant 2"
-    @test df_dispatch_2[3, :plant_dispatch_id] == "Plant 1"
-
-  # Cleanup
+    # Cleanup
     PSRDatabase.close!(db)
     PSRDatabase.close!(db1)
     PSRDatabase.close!(db2)
