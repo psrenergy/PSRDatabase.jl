@@ -100,13 +100,15 @@ function _generate_collection_code(db::DatabaseSQLite, collection_id::String)
     code_lines = String[]
     relation_lines = String[]
 
+    # Generate time series files
+    collection = _get_collection(db, collection_id)
+    time_series_files = _generate_time_series_files_code(db, collection)
+
     num_elements = number_of_elements(db, collection_id)
-    if num_elements == 0
+    if num_elements == 0 && isempty(time_series_files)
         push!(code_lines, "# No elements in $collection_id")
         return join(code_lines, "\n"), relation_lines
     end
-
-    collection = _get_collection(db, collection_id)
 
     # Get all element IDs and labels
     element_ids = _read_all_ids(db, collection_id)
@@ -122,6 +124,10 @@ function _generate_collection_code(db::DatabaseSQLite, collection_id::String)
         if !isempty(element_relations)
             append!(relation_lines, element_relations)
         end
+    end
+
+    if !isempty(time_series_files)
+        append!(code_lines, time_series_files)
     end
 
     return join(code_lines, "\n"), relation_lines
@@ -165,13 +171,6 @@ function _generate_element_code(
 
     push!(code_lines, ")")
 
-    # Generate time series files (immediately after element creation)
-    time_series_files = _generate_time_series_files_code(db, collection, element_id, label)
-    if !isempty(time_series_files)
-        push!(code_lines, "")
-        append!(code_lines, time_series_files)
-    end
-
     # Collect scalar relations to be set at the end
     scalar_relations = _generate_scalar_relations_code(db, collection, element_id, label)
     if !isempty(scalar_relations)
@@ -182,12 +181,6 @@ function _generate_element_code(
     vector_relations = _generate_vector_relations_code(db, collection, element_id, label)
     if !isempty(vector_relations)
         append!(relation_lines, vector_relations)
-    end
-
-    # Collect set relations to be set at the end
-    set_relations = _generate_set_relations_code(db, collection, element_id, label)
-    if !isempty(set_relations)
-        append!(relation_lines, set_relations)
     end
 
     # Collect time series relations to be set at the end
@@ -282,7 +275,9 @@ end
 """
     _generate_set_parameters_code(db::DatabaseSQLite, collection::Collection, element_id::Int)
 
-Generate code for set parameters grouped by their group_id.
+Generate code for set parameters and relations grouped by their group_id.
+This includes both set parameters and set relations that belong to the same group,
+as they must be created together in the same create_element! call.
 """
 function _generate_set_parameters_code(
     db::DatabaseSQLite,
@@ -295,16 +290,16 @@ function _generate_set_parameters_code(
     groups_map = _map_of_groups_to_set_attributes(db, collection.id)
 
     for (group_id, attr_ids) in groups_map
-        # Only get parameter attributes (not relations)
+        # Get both parameter and relation attributes in this group
         param_attrs = String[]
+        relation_attrs = String[]
+
         for attr_id in attr_ids
             if haskey(collection.set_parameters, attr_id)
                 push!(param_attrs, attr_id)
+            elseif haskey(collection.set_relations, attr_id)
+                push!(relation_attrs, attr_id)
             end
-        end
-
-        if isempty(param_attrs)
-            continue
         end
 
         # Read set data for this group
@@ -314,7 +309,7 @@ function _generate_set_parameters_code(
             continue
         end
 
-        # Generate Set literal for each attribute
+        # Generate array literal for each parameter attribute
         for attr_id in param_attrs
             if haskey(set_data, attr_id)
                 values = set_data[attr_id]
@@ -322,6 +317,29 @@ function _generate_set_parameters_code(
                 if any(!_is_null_in_db(v) for v in values)
                     formatted_values = _format_set(values, collection.set_parameters[attr_id].type)
                     push!(code_lines, "    $attr_id = $formatted_values,")
+                end
+            end
+        end
+
+        # Generate array literal for each relation attribute (convert IDs to labels)
+        for attr_id in relation_attrs
+            if haskey(set_data, attr_id)
+                ids = set_data[attr_id]
+                # Convert IDs to labels
+                labels = String[]
+                for id_val in ids
+                    if !ismissing(id_val) && !isnothing(id_val) && !_is_null_in_db(id_val)
+                        label = _get_label_by_id(db, collection.set_relations[attr_id].relation_collection, id_val)
+                        push!(labels, label)
+                    else
+                        push!(labels, "")
+                    end
+                end
+
+                # Only include if not all empty
+                if !all(isempty, labels)
+                    formatted_labels = "[" * join(["\"$l\"" for l in labels], ", ") * "]"
+                    push!(code_lines, "    $attr_id = $formatted_labels,")
                 end
             end
         end
@@ -516,71 +534,6 @@ function _generate_vector_relations_code(
 end
 
 """
-    _generate_set_relations_code(db::DatabaseSQLite, collection::Collection, element_id::Int, label::String)
-
-Generate code for setting set relations.
-"""
-function _generate_set_relations_code(
-    db::DatabaseSQLite,
-    collection::Collection,
-    element_id::Int,
-    label::String,
-)
-    code_lines = String[]
-
-    # Group set relations by group_id
-    groups_map = _map_of_groups_to_set_attributes(db, collection.id)
-
-    for (group_id, attr_ids) in groups_map
-        # Only get relation attributes
-        for attr_id in attr_ids
-            if !haskey(collection.set_relations, attr_id)
-                continue
-            end
-
-            attr = collection.set_relations[attr_id]
-
-            # Read set relation data
-            related_ids = _read_set_relation_data(
-                db,
-                collection.id,
-                group_id,
-                attr_id,
-                element_id,
-            )
-
-            if isempty(related_ids)
-                continue
-            end
-
-            # Convert IDs to labels
-            related_labels = String[]
-            for rid in related_ids
-                if !ismissing(rid) && !isnothing(rid)
-                    rlabel = _get_label_by_id(db, attr.relation_collection, rid)
-                    push!(related_labels, rlabel)
-                else
-                    push!(related_labels, "")
-                end
-            end
-
-            # Skip if all relations are empty
-            if all(isempty, related_labels)
-                continue
-            end
-
-            formatted_labels = "[" * join(["\"$l\"" for l in related_labels], ", ") * "]"
-            push!(
-                code_lines,
-                "PSRDatabase.set_relation!(db, \"$(collection.id)\", \"$(attr.relation_collection)\", \"$label\", $formatted_labels, \"$(attr.relation_type)\")",
-            )
-        end
-    end
-
-    return code_lines
-end
-
-"""
     _generate_time_series_relations_code(db::DatabaseSQLite, collection::Collection, element_id::Int, label::String)
 
 Generate code for adding time series relations row by row.
@@ -665,15 +618,13 @@ function _generate_time_series_relations_code(
 end
 
 """
-    _generate_time_series_files_code(db::DatabaseSQLite, collection::Collection, element_id::Int, label::String)
+    _generate_time_series_files_code(db::DatabaseSQLite, collection::Collection)
 
 Generate code for setting time series file paths.
 """
 function _generate_time_series_files_code(
     db::DatabaseSQLite,
     collection::Collection,
-    element_id::Int,
-    label::String,
 )
     code_lines = String[]
 
@@ -686,7 +637,7 @@ function _generate_time_series_files_code(
 
         push!(
             code_lines,
-            "PSRDatabase.set_time_series_file!(db, \"$(collection.id)\", \"$attr_id\", \"$label\", \"$file_path\")",
+            "PSRDatabase.set_time_series_file!(db, \"$(collection.id)\", $attr_id = \"$file_path\")",
         )
     end
 
@@ -842,21 +793,18 @@ function _read_set_group_data(
     element_id::Int,
 )
     table_name = _set_group_table_name(collection_id, group_id)
-    query = "SELECT * FROM $table_name WHERE id = $element_id"
+    query = "SELECT * FROM $table_name WHERE id = $element_id ORDER BY rowid"
     df = DBInterface.execute(db.sqlite_db, query) |> DataFrame
 
     if isempty(df)
-        return Dict{String, Set}()
+        return Dict{String, Vector}()
     end
 
-    # Convert DataFrame to Dict of sets
-    result = Dict{String, Set}()
+    # Convert DataFrame to Dict of vectors
+    result = Dict{String, Vector}()
     for col_name in names(df)
         if col_name != "id"
-            # Collect all non-missing values into a Set
-            values = df[!, col_name]
-            non_missing_values = filter(!ismissing, values)
-            result[col_name] = Set(non_missing_values)
+            result[col_name] = df[!, col_name]
         end
     end
 
@@ -876,16 +824,14 @@ function _read_set_relation_data(
     element_id::Int,
 )
     table_name = _set_group_table_name(collection_id, group_id)
-    query = "SELECT $attribute_id FROM $table_name WHERE id = $element_id"
+    query = "SELECT $attribute_id FROM $table_name WHERE id = $element_id ORDER BY rowid"
     df = DBInterface.execute(db.sqlite_db, query) |> DataFrame
 
     if isempty(df)
-        return Set{Int}()
+        return Int[]
     end
 
-    values = df[!, attribute_id]
-    non_missing_values = filter(!ismissing, values)
-    return Set(non_missing_values)
+    return df[!, attribute_id]
 end
 
 """
@@ -986,11 +932,11 @@ function _format_vector(values::Vector, type::Type)
 end
 
 """
-    _format_set(values::Set, type::Type)
+    _format_set(values::Vector, type::Type)
 
 Format a set for code generation.
 """
-function _format_set(values::Set, type::Type)
+function _format_set(values::Vector, type::Type)
     # Filter out null values before formatting
     non_null_values = [v for v in values if !_is_null_in_db(v)]
     formatted_values = [_format_value(v, type) for v in non_null_values]

@@ -69,7 +69,7 @@ function test_generate_code_from_parameters_and_vectors()
         "Plant";
         label = "Plant 1",
         capacity = 50.0,
-        some_factor = [0.1, 0.3],
+        some_factor = [0.1, 0.1],
     )
     PSRDatabase.create_element!(
         db,
@@ -430,6 +430,106 @@ function test_generate_code_from_time_series_relations()
         "Resource";
         label = "Resource 2",
         dispatch = df_dispatch,
+
+function test_generate_code_from_sets_with_relations()
+    path_schema = joinpath(@__DIR__, "..", "test_create", "test_create_sets_with_relations.sql")
+    db_path = joinpath(@__DIR__, "test_generate_code_sets_with_relations.sqlite")
+    db_reconstructed_path = joinpath(@__DIR__, "test_generate_code_sets_with_relations_reconstructed.sqlite")
+    code_path = joinpath(@__DIR__, "test_generate_code_sets_with_relations_code.jl")
+
+    # Create and populate original database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(
+        db,
+        "Configuration";
+        label = "Toy Case",
+        some_value = 1.0,
+    )
+    PSRDatabase.create_element!(db, "Product"; label = "Sugar", unit = "Kg")
+    PSRDatabase.create_element!(db, "Product"; label = "Sugarcane", unit = "ton")
+    PSRDatabase.create_element!(db, "Product"; label = "Molasse", unit = "ton")
+    PSRDatabase.create_element!(db, "Product"; label = "Bagasse", unit = "ton")
+    PSRDatabase.create_element!(
+        db,
+        "Process";
+        label = "Sugar Mill",
+        product_set = ["Sugarcane", "Sugar", "Molasse"],
+        factor = [1.0, 0.3, 0.2],
+    )
+    PSRDatabase.create_element!(
+        db,
+        "Process";
+        label = "Ethanol Plant",
+        product_set = ["Molasse", "Bagasse"],
+        factor = [0.5, 0.5],
+    )
+
+    # Generate code to file
+    PSRDatabase.generate_julia_script_from_database(
+        db,
+        code_path,
+        db_reconstructed_path;
+        path_schema = path_schema,
+    )
+
+    include(code_path)
+
+    # Reload both databases
+    db1 = PSRDatabase.load_db(db_path; read_only = true)
+    db2 = PSRDatabase.load_db(db_reconstructed_path; read_only = true)
+
+    # Compare databases
+    @test isempty(PSRDatabase.compare_databases(db1, db2))
+
+    # Cleanup
+    PSRDatabase.close!(db)
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(db_path)
+    rm(db_reconstructed_path)
+    rm(code_path)
+
+    return nothing
+end
+
+function test_generate_code_from_sets_with_only_relations()
+    path_schema = joinpath(@__DIR__, "test_create_sets_with_only_relations.sql")
+    db_path = joinpath(@__DIR__, "test_generate_code_sets_with_only_relations.sqlite")
+    db_reconstructed_path = joinpath(@__DIR__, "test_generate_code_sets_with_only_relations_reconstructed.sqlite")
+    code_path = joinpath(@__DIR__, "test_generate_code_sets_with_only_relations_code.jl")
+
+    # Create and populate original database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(
+        db,
+        "Configuration";
+        label = "Toy Case",
+        some_value = 1.0,
+    )
+    PSRDatabase.create_element!(db, "Product"; label = "Sugar", unit = "Kg")
+    PSRDatabase.create_element!(db, "Product"; label = "Sugarcane", unit = "ton")
+    PSRDatabase.create_element!(db, "Product"; label = "Molasse", unit = "ton")
+    PSRDatabase.create_element!(db, "Product"; label = "Bagasse", unit = "ton")
+
+    # Create a process with set containing only relations (no parameters)
+    PSRDatabase.create_element!(db, "Process"; label = "Sugar Mill")
+    PSRDatabase.set_set_relation!(
+        db,
+        "Process",
+        "Product",
+        "Sugar Mill",
+        ["Sugarcane", "Sugar", "Molasse"],
+        "id",
+    )
+
+    PSRDatabase.create_element!(db, "Process"; label = "Ethanol Plant")
+    PSRDatabase.set_set_relation!(
+        db,
+        "Process",
+        "Product",
+        "Ethanol Plant",
+        ["Molasse", "Bagasse"],
+        "id",
     )
 
     # Generate code to file
@@ -461,6 +561,85 @@ function test_generate_code_from_time_series_relations()
     @test df_dispatch_2[1, :plant_dispatch_id] == "Plant 1"
     @test df_dispatch_2[2, :plant_dispatch_id] == "Plant 2"
     @test df_dispatch_2[3, :plant_dispatch_id] == "Plant 1"
+
+  # Cleanup
+    PSRDatabase.close!(db)
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(db_path)
+    rm(db_reconstructed_path)
+    rm(code_path)
+
+    return nothing
+end
+
+function test_generate_code_time_series_files()
+    path_schema = joinpath(@__DIR__, "..", "test_create", "test_create_parameters_and_vectors.sql")
+    db_path = joinpath(@__DIR__, "test_generate_code_time_series_files.sqlite")
+    db_reconstructed_path = joinpath(@__DIR__, "test_generate_code_time_series_files_reconstructed.sqlite")
+    code_path = joinpath(@__DIR__, "test_generate_code_time_series_files_code.jl")
+
+    # Create and populate original database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
+    PSRDatabase.create_element!(db, "Plant"; label = "Plant1", capacity = 100.0)
+    PSRDatabase.set_time_series_file!(db, "Plant"; generation = "generation1.csv")
+
+    # Generate code to file
+    PSRDatabase.generate_julia_script_from_database(
+        db,
+        code_path,
+        db_reconstructed_path;
+        path_schema = path_schema,
+    )
+
+    include(code_path)
+
+    # Reload both databases
+    db1 = PSRDatabase.load_db(db_path; read_only = true)
+    db2 = PSRDatabase.load_db(db_reconstructed_path; read_only = true)
+
+    # Compare databases
+    @test isempty(PSRDatabase.compare_databases(db1, db2))
+
+    # Cleanup
+    PSRDatabase.close!(db)
+    PSRDatabase.close!(db1)
+    PSRDatabase.close!(db2)
+    rm(db_path)
+    rm(db_reconstructed_path)
+    rm(code_path)
+
+    return nothing
+end
+
+function test_generate_code_only_time_series_files_in_db()
+    path_schema = joinpath(@__DIR__, "..", "test_create", "test_create_parameters_and_vectors.sql")
+    db_path = joinpath(@__DIR__, "test_generate_code_only_time_series_files_in_db.sqlite")
+    db_reconstructed_path = joinpath(@__DIR__, "test_generate_code_only_time_series_files_in_db_reconstructed.sqlite")
+    code_path = joinpath(@__DIR__, "test_generate_code_only_time_series_files_in_db_code.jl")
+
+    # Create and populate original database
+    db = PSRDatabase.create_empty_db_from_schema(db_path, path_schema; force = true)
+    PSRDatabase.create_element!(db, "Configuration"; label = "Toy Case", value1 = 1.0)
+    PSRDatabase.set_time_series_file!(db, "Plant"; generation = "generation1.csv")
+
+    # Generate code to file
+    PSRDatabase.generate_julia_script_from_database(
+        db,
+        code_path,
+        db_reconstructed_path;
+        path_schema = path_schema,
+    )
+
+    include(code_path)
+
+    # Reload both databases
+    db1 = PSRDatabase.load_db(db_path; read_only = true)
+    db2 = PSRDatabase.load_db(db_reconstructed_path; read_only = true)
+
+    # Compare databases
+    @test isempty(PSRDatabase.compare_databases(db1, db2))
 
     # Cleanup
     PSRDatabase.close!(db)
