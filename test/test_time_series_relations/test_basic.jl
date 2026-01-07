@@ -322,7 +322,7 @@ function test_get_id_to_label_mapping()
     mapping = PSRDatabase._get_id_to_label_mapping(db, "Plant")
 
     # Test that mapping is a Dict{Int, String}
-    @test mapping isa Dict{Int,String}
+    @test mapping isa Dict{Int, String}
 
     # Test that mapping contains all plants
     @test mapping[1] == "Plant 1"
