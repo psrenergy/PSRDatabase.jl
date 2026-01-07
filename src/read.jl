@@ -1193,7 +1193,7 @@ function read_time_series_relation_table(
 end
 
 """
-    read_time_series_relation_row(db::DatabaseSQLite, collection_id::String, attribute_id::String, ::Type{String}; date_time::DateTime, additional_dimensions...)
+    read_time_series_relation_row(db::DatabaseSQLite, collection_id::String, attribute_id::String, ::Type{String}; date_time::DateTime)
 
 Read a single row of time series relation data with caching (read-only mode).
 Returns labels instead of IDs for the relation values.
@@ -1205,7 +1205,6 @@ Returns labels instead of IDs for the relation values.
   - `attribute_id::String`: The identifier of the time series relation attribute
   - `::Type{String}`: Type parameter (always String for relations)
   - `date_time::DateTime`: The date/time for which to read data
-  - `additional_dimensions...`: Additional dimensions (e.g., block=1, scenario=2)
 
 # Returns
 
@@ -1227,7 +1226,6 @@ function read_time_series_relation_row(
     attribute_id::String,
     ::Type{String};
     date_time::DateTime,
-    additional_dimensions...,
 )
     @assert _is_read_only(db) "Time series mapping only works in read only databases"
 
