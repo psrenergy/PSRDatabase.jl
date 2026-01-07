@@ -13,6 +13,7 @@ mutable struct Collection
     set_parameters::OrderedDict{String, SetParameter}
     set_relations::OrderedDict{String, SetRelation}
     time_series::OrderedDict{String, TimeSeries}
+    time_series_relations::OrderedDict{String, TimeSeriesRelation}
     time_series_files::OrderedDict{String, TimeSeriesFile}
 end
 
@@ -32,7 +33,7 @@ function _create_collections_map!(
         vector_relations = _create_collection_vector_relations(db, collection_id)
         set_parameters = _create_collection_set_parameters(db, collection_id)
         set_relations = _create_collection_set_relations(db, collection_id)
-        time_series = _create_collection_time_series(db, collection_id)
+        time_series, time_series_relations = _create_collection_time_series(db, collection_id)
         time_series_files = _create_collection_time_series_files(db, collection_id)
         collection = Collection(
             collection_id,
@@ -43,6 +44,7 @@ function _create_collections_map!(
             set_parameters,
             set_relations,
             time_series,
+            time_series_relations,
             time_series_files,
         )
         collections_map[collection_id] = collection
@@ -358,11 +360,13 @@ end
 function _create_collection_time_series(db::SQLite.DB, collection_id::String)
     time_series_tables = _get_collection_time_series_tables(db, collection_id)
     time_series = OrderedDict{String, TimeSeries}()
+    time_series_relations = OrderedDict{String, TimeSeriesRelation}()
     parent_collection = collection_id
     for table_name in time_series_tables
         group_id = _id_of_time_series_group(table_name)
         table_where_is_located = table_name
         df_table_infos = table_info(db, table_name)
+        df_foreign_keys_list = foreign_keys_list(db, table_name)
         dimension_names = _get_time_series_dimension_names(df_table_infos)
         for time_series_attribute in eachrow(df_table_infos)
             id = time_series_attribute.name
@@ -387,28 +391,70 @@ function _create_collection_time_series(db::SQLite.DB, collection_id::String)
                 end
                 continue
             end
-            type = _sql_type_to_julia_type(id, time_series_attribute.type)
-            default_value = _get_default_value(type, time_series_attribute.dflt_value)
-            not_null = Bool(time_series_attribute.notnull)
-            if haskey(time_series, id)
-                psr_database_sqlite_error(
-                    "Duplicated time_series attribute \"$id\" in collection \"$collection_id\"",
+
+            # Check if this is a foreign key (relation)
+            if id in df_foreign_keys_list.from
+                # Skip the "id" foreign key (it's just the reference to parent collection)
+                if id == "id"
+                    continue
+                end
+
+                # This is a time series relation
+                _validate_actions_on_foreign_key(
+                    collection_id,
+                    table_name,
+                    df_foreign_keys_list[df_foreign_keys_list.from .== id, :][1, :],
+                )
+                type = _sql_type_to_julia_type(id, time_series_attribute.type)
+                default_value = _get_default_value(type, time_series_attribute.dflt_value)
+                not_null = Bool(time_series_attribute.notnull)
+                relation_type = _get_relation_type_from_attribute_id(id)
+                relation_collection = df_foreign_keys_list[df_foreign_keys_list.from .== id, :table][1]
+
+                if haskey(time_series_relations, id)
+                    psr_database_sqlite_error(
+                        "Duplicated time_series_relation attribute \"$id\" in collection \"$collection_id\"",
+                    )
+                end
+
+                time_series_relations[id] = TimeSeriesRelation(
+                    id,
+                    type,
+                    default_value,
+                    not_null,
+                    group_id,
+                    parent_collection,
+                    relation_collection,
+                    relation_type,
+                    table_where_is_located,
+                    dimension_names,
+                    length(dimension_names),
+                )
+            else
+                # This is a regular time series parameter
+                type = _sql_type_to_julia_type(id, time_series_attribute.type)
+                default_value = _get_default_value(type, time_series_attribute.dflt_value)
+                not_null = Bool(time_series_attribute.notnull)
+                if haskey(time_series, id)
+                    psr_database_sqlite_error(
+                        "Duplicated time_series attribute \"$id\" in collection \"$collection_id\"",
+                    )
+                end
+                time_series[id] = TimeSeries(
+                    id,
+                    type,
+                    default_value,
+                    not_null,
+                    group_id,
+                    parent_collection,
+                    table_where_is_located,
+                    dimension_names,
+                    length(dimension_names),
                 )
             end
-            time_series[id] = TimeSeries(
-                id,
-                type,
-                default_value,
-                not_null,
-                group_id,
-                parent_collection,
-                table_where_is_located,
-                dimension_names,
-                length(dimension_names),
-            )
         end
     end
-    return time_series
+    return time_series, time_series_relations
 end
 
 function _create_collection_time_series_files(db::SQLite.DB, collection_id::String)
@@ -671,6 +717,7 @@ function _relations_do_not_have_null_constraints(collection::Collection)
     num_errors = 0
     scalar_relations = collection.scalar_relations
     vector_relations = collection.vector_relations
+    time_series_relations = collection.time_series_relations
     for (_, scalar_relation) in scalar_relations
         if scalar_relation.not_null
             @error(
@@ -687,6 +734,14 @@ function _relations_do_not_have_null_constraints(collection::Collection)
             num_errors += 1
         end
     end
+    for (_, time_series_relation) in time_series_relations
+        if time_series_relation.not_null
+            @error(
+                "Time series relation \"$(time_series_relation.id)\" in collection \"$(collection.id)\" has a not null constraint. This is not allowed."
+            )
+            num_errors += 1
+        end
+    end
     return num_errors
 end
 
@@ -694,6 +749,7 @@ function _relations_do_not_have_default_values(collection::Collection)
     num_errors = 0
     scalar_relations = collection.scalar_relations
     vector_relations = collection.vector_relations
+    time_series_relations = collection.time_series_relations
     for (_, scalar_relation) in scalar_relations
         if !ismissing(scalar_relation.default_value)
             @error(
@@ -706,6 +762,14 @@ function _relations_do_not_have_default_values(collection::Collection)
         if !ismissing(vector_relation.default_value)
             @error(
                 "vector relation \"$(vector_relation.id)\" in collection \"$(collection.id)\" has a default value."
+            )
+            num_errors += 1
+        end
+    end
+    for (_, time_series_relation) in time_series_relations
+        if !ismissing(time_series_relation.default_value)
+            @error(
+                "Time series relation \"$(time_series_relation.id)\" in collection \"$(collection.id)\" has a default value."
             )
             num_errors += 1
         end

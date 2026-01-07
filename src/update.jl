@@ -11,6 +11,7 @@ const UPDATE_METHODS_BY_CLASS_OF_ATTRIBUTE = Dict(
     SetParameter => "update_set_parameters!",
     SetRelation => "set_set_relation!",
     TimeSeries => "update_time_series_row!",
+    TimeSeriesRelation => "update_time_series_relation_row!",
     TimeSeriesFile => "set_time_series_file!",
 )
 
@@ -950,4 +951,99 @@ function update_time_series_row!(
     end
 
     return _update_time_series_row!(db, attribute, id, val, dimensions)
+end
+
+"""
+    update_time_series_relation_row!(db::DatabaseSQLite, collection_id::String, attribute_id::String, label::String, val; dimensions...)
+
+Update an existing relation value in a time series relation attribute for a specific element and dimension combination.
+
+Unlike `add_time_series_relation_row!`, this function only updates existing rows and will throw an error if the
+specified dimension combination doesn't exist.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_id::String`: The identifier of the collection containing the element
+  - `attribute_id::String`: The identifier of the time series relation attribute
+  - `label::String`: The label of the element to update the time series relation for
+  - `val`: The label of the related element (String) or an empty string for null relation
+  - `dimensions...`: Named arguments specifying the dimension values that identify the row to update
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if the attribute is not a time series relation
+  - `DatabaseException` if the number of dimensions doesn't match the attribute definition
+  - `DatabaseException` if dimension names don't match the attribute definition
+  - `DatabaseException` if the specified dimension combination doesn't exist
+  - `DatabaseException` if the related element label doesn't exist
+
+# Examples
+
+```julia
+# Update an existing time series relation value
+PSRDatabase.update_time_series_relation_row!(
+    db,
+    "Resource",
+    "plant_id",
+    "Resource 1",
+    "Plant 2";
+    date_time = DateTime(2020, 1, 1),
+)
+
+# Update with multiple dimensions
+PSRDatabase.update_time_series_relation_row!(
+    db,
+    "Resource",
+    "plant_id",
+    "Resource 1",
+    "Plant 3";
+    date_time = DateTime(2020, 1, 1),
+    block = 1,
+)
+```
+"""
+function update_time_series_relation_row!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+    label::String,
+    val::String;
+    dimensions...,
+)
+    _throw_if_attribute_is_not_time_series_relation(
+        db,
+        collection_id,
+        attribute_id,
+        :update,
+    )
+    attribute = _get_attribute(db, collection_id, attribute_id)
+    id = _get_id(db, collection_id, label)
+    _validate_time_series_dimensions(collection_id, attribute, dimensions)
+
+    if !_dimension_value_exists(db, attribute, id, dimensions...)
+        psr_database_sqlite_error(
+            "The chosen values for dimensions $(join(keys(dimensions), ", ")) do not exist in the time series for element $(label) in collection $(collection_id).",
+        )
+    end
+
+    if length(dimensions) != length(attribute.dimension_names)
+        psr_database_sqlite_error(
+            "The number of dimensions in the time series does not match the number of dimensions in the attribute. " *
+            "The attribute has $(attribute.num_dimensions) dimensions: $(join(attribute.dimension_names, ", ")).",
+        )
+    end
+
+    # Convert label to ID
+    relation_id = if _is_null_in_db(val)
+        _PSRDatabase_null_value(Int)
+    else
+        _get_id(db, attribute.relation_collection, val)
+    end
+
+    return _update_time_series_row!(db, attribute, id, relation_id, dimensions)
 end

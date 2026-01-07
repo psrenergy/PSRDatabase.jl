@@ -185,6 +185,8 @@ function _create_time_series!(
         DataFrames.insertcols!(df, 1, :id => ids)
         # Convert datetime column to string
         df[!, :date_time] = string.(df[!, :date_time])
+        # Convert time series relation labels to IDs
+        _replace_time_series_relation_labels_with_ids!(db, collection_id, string(group), df)
         # Add missing columns
         missing_names_in_df = setdiff(_attributes_in_time_series_group(db, collection_id, string(group)), string.(names(df)))
         for missing_attribute in missing_names_in_df
@@ -470,6 +472,46 @@ function _replace_set_relation_labels_with_ids!(
     return nothing
 end
 
+function _replace_time_series_relation_labels_with_ids!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    group_id::String,
+    df::DataFrame,
+)
+    collection = _get_collection(db, collection_id)
+
+    for (attr_name, attribute) in collection.time_series_relations
+        if attribute.group_id == group_id && string(attr_name) in names(df)
+            # Convert labels to IDs
+            relation_collection = attribute.relation_collection
+
+            # Create a vector of IDs to replace the entire column
+            ids = Vector{Int}(undef, nrow(df))
+            for i in 1:nrow(df)
+                value = df[i, attr_name]
+                if ismissing(value)
+                    ids[i] = _PSRDatabase_null_value(Int)
+                elseif isa(value, String)
+                    if !_is_null_in_db(value)
+                        ids[i] = _get_id(db, relation_collection, value)
+                    else
+                        ids[i] = _PSRDatabase_null_value(Int)
+                    end
+                elseif isa(value, Int) || isa(value, Integer)
+                    # Already an ID, keep it
+                    ids[i] = value
+                else
+                    ids[i] = _PSRDatabase_null_value(Int)
+                end
+            end
+
+            # Replace the entire column
+            df[!, attr_name] = ids
+        end
+    end
+    return nothing
+end
+
 function _validate_attribute_types_on_creation!(
     db::DatabaseSQLite,
     collection_id::String,
@@ -603,4 +645,102 @@ function add_time_series_row!(
     end
 
     return _add_time_series_row!(db, attribute, id, val, dimensions)
+end
+
+"""
+    add_time_series_relation_row!(db::DatabaseSQLite, collection_id::String, attribute_id::String, label::String, val; dimensions...)
+
+Add or update a relation value in a time series relation attribute for a specific element and dimension combination.
+
+This function performs an "upsert" operation for time series relations. Unlike scalar relations which use IDs internally,
+this function accepts a label string and converts it to an ID.
+
+# Arguments
+
+  - `db::DatabaseSQLite`: The database connection
+  - `collection_id::String`: The identifier of the collection containing the element
+  - `attribute_id::String`: The identifier of the time series relation attribute
+  - `label::String`: The label of the element to add/update the time series relation for
+  - `val`: The label of the related element (String) or an empty string for null relation
+  - `dimensions...`: Named arguments specifying the dimension values (e.g., `date_time=DateTime(2020, 1, 1)`)
+
+# Returns
+
+  - `nothing`
+
+# Throws
+
+  - `DatabaseException` if the attribute is not a time series relation
+  - `DatabaseException` if the number of dimensions doesn't match the attribute definition
+  - `DatabaseException` if dimension names don't match the attribute definition
+  - `DatabaseException` if the related element label doesn't exist
+
+# Examples
+
+```julia
+# Add time series relation value
+PSRDatabase.add_time_series_relation_row!(
+    db,
+    "Resource",
+    "plant_id",
+    "Resource 1",
+    "Plant 1";
+    date_time = DateTime(2020, 1, 1),
+)
+
+# Add time series relation with multiple dimensions
+PSRDatabase.add_time_series_relation_row!(
+    db,
+    "Resource",
+    "plant_id",
+    "Resource 1",
+    "Plant 2";
+    date_time = DateTime(2020, 1, 1),
+    block = 1,
+)
+
+# Update existing time series relation (same dimensions)
+PSRDatabase.add_time_series_relation_row!(
+    db,
+    "Resource",
+    "plant_id",
+    "Resource 1",
+    "Plant 3";
+    date_time = DateTime(2020, 1, 1),  # This will update the existing value
+)
+```
+"""
+function add_time_series_relation_row!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+    label::String,
+    val::String;
+    dimensions...,
+)
+    _throw_if_attribute_is_not_time_series_relation(
+        db,
+        collection_id,
+        attribute_id,
+        :create,
+    )
+    attribute = _get_attribute(db, collection_id, attribute_id)
+    id = _get_id(db, collection_id, label)
+    _validate_time_series_dimensions(collection_id, attribute, dimensions)
+
+    if length(dimensions) != length(attribute.dimension_names)
+        psr_database_sqlite_error(
+            "The number of dimensions in the time series does not match the number of dimensions in the attribute. " *
+            "The attribute has $(attribute.num_dimensions) dimensions: $(join(attribute.dimension_names, ", ")).",
+        )
+    end
+
+    # Convert label to ID
+    relation_id = if _is_null_in_db(val)
+        _PSRDatabase_null_value(Int)
+    else
+        _get_id(db, attribute.relation_collection, val)
+    end
+
+    return _add_time_series_row!(db, attribute, id, relation_id, dimensions)
 end

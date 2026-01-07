@@ -390,6 +390,26 @@ function _throw_if_attribute_is_not_time_series(
     return nothing
 end
 
+function _throw_if_attribute_is_not_time_series_relation(
+    db::DatabaseSQLite,
+    collection::String,
+    attribute::String,
+    action::Symbol,
+)
+    _throw_if_collection_or_attribute_do_not_exist(db, collection, attribute)
+
+    if !_is_time_series_relation(db, collection, attribute)
+        correct_composity_type =
+            _attribute_composite_type(db, collection, attribute)
+        string_of_composite_types = _string_for_composite_types(correct_composity_type)
+        correct_method_to_use = _get_correct_method_to_use(correct_composity_type, action)
+        psr_database_sqlite_error(
+            "Attribute \"$attribute\" is not a time series relation. It is a $string_of_composite_types. Use `$correct_method_to_use` instead.",
+        )
+    end
+    return nothing
+end
+
 function _throw_if_attribute_is_not_time_series_file(
     db::DatabaseSQLite,
     collection::String,
@@ -452,7 +472,7 @@ function _throw_if_data_does_not_match_group(
     attributes_in_df = []
 
     for column in names(df)
-        if column in keys(collection.time_series)
+        if column in keys(collection.time_series) || column in keys(collection.time_series_relations)
             # should be an attribute
             push!(attributes_in_df, column)
         elseif column in dimensions_of_group
@@ -476,7 +496,9 @@ function _throw_if_data_does_not_match_group(
     end
 
     for dimension in dimensions_in_df
-        if !(dimension in collection.time_series[attributes_in_df[1]].dimension_names)
+        # Get the first attribute (could be either time_series or time_series_relation)
+        first_attribute = _get_attribute(db, collection_id, attributes_in_df[1])
+        if !(dimension in first_attribute.dimension_names)
             psr_database_sqlite_error(
                 "The dimension \"$dimension\" is not defined in the time series group \"$group\".",
             )

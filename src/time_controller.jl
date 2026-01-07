@@ -28,13 +28,17 @@ end
 Base.@kwdef mutable struct TimeController
     cache::Dict{CollectionAttribute, AttributeTimeSeriesCache} = Dict{CollectionAttribute, AttributeTimeSeriesCache}()
 
-    # Upon initialization the time controller will ask if a certain 
-    # collection is empty, if the collection is empty it 
+    # Upon initialization the time controller will ask if a certain
+    # collection is empty, if the collection is empty it
     # will be added to this cache. This cache will be used to avoid querying
     # multiple times if a certain collection is empty.
-    # This relies on the fact that the Time Controller only works in 
+    # This relies on the fact that the Time Controller only works in
     # read only databases.
     collection_is_empty::Dict{String, Bool} = Dict{String, Bool}()
+
+    # Cache for ID-to-label mappings for time series relations
+    # Maps collection_id => (element_id => label)
+    id_to_label_cache::Dict{String, Dict{Int, String}} = Dict{String, Dict{Int, String}}()
 end
 
 function _collection_attribute(collection_id::String, attribute_id::String)::CollectionAttribute
@@ -48,6 +52,17 @@ function _time_controller_collection_is_empty(db, collection_id::String)::Bool
         db._time_controller.collection_is_empty[collection_id] = number_of_elements(db, collection_id) == 0
         return db._time_controller.collection_is_empty[collection_id]
     end
+end
+
+function _get_id_to_label_mapping(db, collection_id::String)
+    # Get or create cached ID-to-label mapping for a collection
+    if !haskey(db._time_controller.id_to_label_cache, collection_id)
+        labels = read_scalar_parameters(db, collection_id, "label")
+        mapping = Dict{Int, String}(i => label for (i, label) in enumerate(labels))
+        mapping[_PSRDatabase_null_value(Int)] = ""
+        db._time_controller.id_to_label_cache[collection_id] = mapping
+    end
+    return db._time_controller.id_to_label_cache[collection_id]
 end
 
 function query_data_in_time_controller(

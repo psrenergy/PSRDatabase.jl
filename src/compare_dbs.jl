@@ -483,6 +483,152 @@ function compare_time_series(
 end
 
 """
+    compare_time_series_relations(db1::DatabaseSQLite, db2::DatabaseSQLite, collection_id::String)
+
+Compare time series relations between two databases for a specific collection.
+
+This function iterates through all time series relation attributes in the specified collection,
+grouped by their group_id, and compares the relation data for each element between the two databases.
+For each time series relation, it checks:
+- The size of the time series tables (number of rows and columns)
+- The column names and their order
+- Individual relation references in each cell of the time series data
+
+The comparison ensures that relation labels match between databases at each time point and dimension.
+
+# Arguments
+
+  - `db1::DatabaseSQLite`: The first database to compare (used as the reference for reading collection structure and element labels)
+  - `db2::DatabaseSQLite`: The second database to compare against the first
+  - `collection_id::String`: The name of the collection (table) to compare time series relation data for
+
+# Returns
+
+A vector of strings describing differences found in time series relation data. Each string includes the
+collection name, time series relation attribute name, element label, column name, row index, and the
+differing relation labels. Returns an empty vector if all time series relation data is identical.
+
+# Example
+
+```julia
+using DataFrames, Dates
+
+db1 = create_empty_db_from_schema("db1.sqlite", "schema.sql"; force = true)
+db2 = create_empty_db_from_schema("db2.sqlite", "schema.sql"; force = true)
+
+# Create plants
+for db in [db1, db2]
+    create_element!(db, "Plant"; label = "Plant 1")
+    create_element!(db, "Plant"; label = "Plant 2")
+    create_element!(db, "Plant"; label = "Plant 3")
+end
+
+# Create resources with different time series relations
+df1 = DataFrame(
+    date_time = [DateTime(2020), DateTime(2021), DateTime(2022)],
+    power = [100.0, 200.0, 300.0],
+    plant_id = ["Plant 1", "Plant 2", "Plant 3"],
+)
+df2 = DataFrame(
+    date_time = [DateTime(2020), DateTime(2021), DateTime(2022)],
+    power = [100.0, 200.0, 300.0],
+    plant_id = ["Plant 1", "Plant 1", "Plant 3"],
+)
+
+create_element!(db1, "Resource"; label = "Resource1", generation = df1)
+create_element!(db2, "Resource"; label = "Resource1", generation = df2)
+
+differences = compare_time_series_relations(db1, db2, "Resource")
+# Returns: ["Collection 'Resource', time series relation 'plant_id', label 'Resource1', column 'plant_id', row 2: relations differ (db1: Plant 2, db2: Plant 1)"]
+```
+"""
+function compare_time_series_relations(
+    db1::DatabaseSQLite,
+    db2::DatabaseSQLite,
+    collection_id::String,
+)
+    differences = String[]
+    collection = _get_collection(db1, collection_id)
+
+    # Get all element labels
+    num_elements_db1 = number_of_elements(db1, collection_id)
+    num_elements_db2 = number_of_elements(db2, collection_id)
+
+    # Check if the number of elements is the same
+    if num_elements_db1 != num_elements_db2
+        push!(
+            differences,
+            "Collection '$collection_id': different number of elements (db1: $num_elements_db1, db2: $num_elements_db2)",
+        )
+        return differences
+    end
+
+    labels = read_scalar_parameters(db1, collection_id, "label")
+
+    # Group time series relations by group_id
+    time_series_relation_groups = Dict{String, Vector{String}}()
+    for (attr_id, attr) in collection.time_series_relations
+        group_id = attr.group_id
+        if !haskey(time_series_relation_groups, group_id)
+            time_series_relation_groups[group_id] = String[]
+        end
+        push!(time_series_relation_groups[group_id], attr_id)
+    end
+
+    for label in labels
+        for (group_id, attr_ids) in time_series_relation_groups
+            for attr_id in attr_ids
+                df1 = read_time_series_relation_table(db1, collection_id, attr_id, label)
+                df2 = read_time_series_relation_table(db2, collection_id, attr_id, label)
+
+                if size(df1) != size(df2)
+                    push!(
+                        differences,
+                        "Collection '$collection_id', time series relation '$attr_id', label '$label': different table sizes (db1: $(size(df1)), db2: $(size(df2)))",
+                    )
+                    continue
+                end
+
+                if names(df1) != names(df2)
+                    push!(
+                        differences,
+                        "Collection '$collection_id', time series relation '$attr_id', label '$label': different column names (db1: $(names(df1)), db2: $(names(df2)))",
+                    )
+                    continue
+                end
+
+                # Compare each column
+                for col_name in names(df1)
+                    col1 = df1[!, col_name]
+                    col2 = df2[!, col_name]
+
+                    for (row_idx, (v1, v2)) in enumerate(zip(col1, col2))
+                        # Handle missing and empty string cases
+                        if (ismissing(v1) || v1 == "") && (ismissing(v2) || v2 == "")
+                            continue
+                        elseif (ismissing(v1) || v1 == "") || (ismissing(v2) || v2 == "")
+                            push!(
+                                differences,
+                                "Collection '$collection_id', time series relation '$attr_id', label '$label', column '$col_name', row $row_idx: null/empty mismatch (db1: $(v1), db2: $(v2))",
+                            )
+                        else
+                            if v1 != v2
+                                push!(
+                                    differences,
+                                    "Collection '$collection_id', time series relation '$attr_id', label '$label', column '$col_name', row $row_idx: relations differ (db1: $(v1), db2: $(v2))",
+                                )
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return differences
+end
+
+"""
     compare_time_series_files(db1::DatabaseSQLite, db2::DatabaseSQLite, collection_id::String)
 
 Compare time series file paths between two databases for a specific collection.
@@ -840,6 +986,11 @@ function compare_databases(
         # Compare time series
         if !isempty(_get_collection(db1, collection_id).time_series)
             append!(all_differences, compare_time_series(db1, db2, collection_id))
+        end
+
+        # Compare time series relations
+        if !isempty(_get_collection(db1, collection_id).time_series_relations)
+            append!(all_differences, compare_time_series_relations(db1, db2, collection_id))
         end
 
         # Compare time series files
