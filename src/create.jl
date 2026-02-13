@@ -604,3 +604,29 @@ function add_time_series_row!(
 
     return _add_time_series_row!(db, attribute, id, val, dimensions)
 end
+
+function add_time_series_row!(
+    db::DatabaseSQLite,
+    collection_id::String,
+    attribute_id::String,
+    id::Int,
+    val;
+    dimensions...,
+)
+    if !_is_time_series(db, collection_id, attribute_id)
+        psr_database_sqlite_error(
+            "The attribute $attribute_id is not a time series.",
+        )
+    end
+    attribute = _get_attribute(db, collection_id, attribute_id)
+    _validate_time_series_dimensions(collection_id, attribute, dimensions)
+
+    if length(dimensions) != length(attribute.dimension_names)
+        psr_database_sqlite_error(
+            "The number of dimensions in the time series does not match the number of dimensions in the attribute. " *
+            "The attribute has $(attribute.num_dimensions) dimensions: $(join(attribute.dimension_names, ", ")).",
+        )
+    end
+
+    return _add_time_series_row!(db, attribute, id, val, dimensions)
+end
