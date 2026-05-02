@@ -591,7 +591,11 @@ function _get_scalar_relation_map(
     )
     attribute = _get_attribute(db, collection_from, attribute_on_collection_from)
 
-    query = "SELECT $(attribute.id) FROM $(attribute.table_where_is_located)"
+    # ORDER BY id so the result aligns with source rows in id order. Without
+    # it, SQLite is free to pick an index-driven scan when a covering index
+    # exists on the FK column, which traverses rows in FK-value order and
+    # shuffles the returned vector. See psrenergy/PSRDatabase.jl#23.
+    query = "SELECT $(attribute.id) FROM $(attribute.table_where_is_located) ORDER BY id"
     df = DBInterface.execute(db.sqlite_db, query) |> DataFrame
     results = df[!, 1]
     num_results = length(results)
